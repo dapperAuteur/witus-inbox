@@ -49,3 +49,5 @@ plans/
 
 # drizzle meta (drizzle-kit regenerates from schema.ts)
 /db/migrations/meta/
+
+AGENTS.md
