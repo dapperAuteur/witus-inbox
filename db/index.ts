@@ -10,7 +10,7 @@ let cached: InboxDb | null = null;
 
 export function getDb(): InboxDb {
   if (cached) return cached;
-  const sql = neon(getEnv().DATABASE_URL);
+  const sql = neon(getEnv().STORAGE_DATABASE_URL);
   cached = drizzle(sql, { schema });
   return cached;
 }

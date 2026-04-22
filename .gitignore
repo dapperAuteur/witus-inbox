@@ -44,5 +44,8 @@ next-env.d.ts
 # planning docs are local-only, never shipped in a commit
 plans/
 
+# Claude Code local config
+.claude/
+
 # drizzle meta (drizzle-kit regenerates from schema.ts)
 /db/migrations/meta/

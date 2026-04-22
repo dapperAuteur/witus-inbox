@@ -1,8 +1,13 @@
 import type { Config } from "drizzle-kit";
 import "dotenv/config";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is required to run drizzle-kit");
+const migrationUrl =
+  process.env.STORAGE_DATABASE_URL_UNPOOLED ?? process.env.STORAGE_DATABASE_URL;
+
+if (!migrationUrl) {
+  throw new Error(
+    "STORAGE_DATABASE_URL_UNPOOLED (preferred) or STORAGE_DATABASE_URL is required to run drizzle-kit"
+  );
 }
 
 export default {
@@ -10,6 +15,6 @@ export default {
   out: "./db/migrations",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL,
+    url: migrationUrl,
   },
 } satisfies Config;
