@@ -37,3 +37,4 @@ Sign in with `ADMIN_EMAIL`; magic link is emailed via Mailgun SMTP.
 | `npm run db:migrate` | Apply migrations |
 | `npm run db:push` | Push schema directly (dev only) |
 | `npm run db:studio` | Browse the DB |
+# witus-inbox
