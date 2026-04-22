@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 
 const EnvSchema = z.object({
-  DATABASE_URL: z.string().url(),
+  STORAGE_DATABASE_URL: z.string().url(),
   NEXTAUTH_URL: z.string().url(),
   NEXTAUTH_SECRET: z.string().min(16),
   EMAIL_SERVER: z.string().min(1),
