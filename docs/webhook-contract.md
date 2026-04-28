@@ -146,7 +146,7 @@ If you get 401 with no further body: re-check the source slug and the secret-str
 
 ## Sender stub (pseudo-code)
 
-For a fuller working sender in TypeScript, see [`scripts/smoke-test-bam-landing-page.ts`](../scripts/smoke-test-bam-landing-page.ts). The pseudo-code:
+A drop-in TypeScript sender lives at [`examples/sender.ts`](../examples/sender.ts) — copy-paste it into your publisher product. Integration patterns for Next.js Server Actions, Express, and other-language senders are in [`examples/README.md`](../examples/README.md). The pseudo-code below is language-agnostic:
 
 ```
 function sendToInbox(formData):

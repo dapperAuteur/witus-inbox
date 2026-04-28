@@ -98,7 +98,7 @@ Content-Type:      application/json
 
 Full spec, payload Zod schema, failure modes, and a working curl example: **[`docs/webhook-contract.md`](./docs/webhook-contract.md)**.
 
-A working sender stub lives at [`scripts/smoke-test-bam-landing-page.ts`](./scripts/smoke-test-bam-landing-page.ts) — that's the reference implementation for a publisher product.
+A working sender library lives at [`examples/sender.ts`](./examples/sender.ts) — copy-paste into your publisher product, or import from this repo. [`examples/README.md`](./examples/README.md) has integration patterns for Next.js Server Actions, Express, and other-language senders.
 
 ## Triage UI
 
