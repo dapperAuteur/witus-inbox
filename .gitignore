@@ -51,3 +51,4 @@ plans/
 /db/migrations/meta/
 
 AGENTS.md
+.env*.local
