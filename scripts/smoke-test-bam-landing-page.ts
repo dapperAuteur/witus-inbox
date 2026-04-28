@@ -18,8 +18,8 @@
 import { config as loadEnv } from "dotenv";
 import { createHmac } from "node:crypto";
 
-loadEnv({ path: ".env.local" });
-loadEnv();
+loadEnv({ path: ".env.local", quiet: true });
+loadEnv({ quiet: true });
 
 const INBOX_URL = process.env.INBOX_URL ?? "http://localhost:3000/api/ingest";
 const SOURCE_SLUG = "bam-landing-page";

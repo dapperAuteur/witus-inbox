@@ -3,7 +3,10 @@ import { z } from "zod";
 
 const EnvSchema = z.object({
   STORAGE_DATABASE_URL: z.string().url(),
-  NEXTAUTH_URL: z.string().url(),
+  // Optional: NextAuth v4 falls back to `VERCEL_URL` on Vercel preview/prod
+  // when this is unset, and to the request origin in local dev. Set
+  // explicitly in Production to your canonical URL (e.g. https://inbox.example.com).
+  NEXTAUTH_URL: z.string().url().optional(),
   NEXTAUTH_SECRET: z.string().min(16),
   EMAIL_SERVER: z.string().min(1),
   EMAIL_FROM: z
