@@ -4,6 +4,10 @@ A signed-webhook receiver, canonical-record store, and triage UI for solo operat
 
 > **Status:** v0 in production at [`inbox.witus.online`](https://inbox.witus.online), single-admin. Open-sourced 2026 to share the cross-product webhook pattern.
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FdapperAuteur%2Fwitus-inbox&env=NEXTAUTH_SECRET,EMAIL_SERVER,EMAIL_FROM,ADMIN_EMAIL,INGEST_SOURCES&envDescription=See%20.env.example%20for%20each%20variable%27s%20purpose%20and%20format.%20Generate%20NEXTAUTH_SECRET%20with%20%60openssl%20rand%20-base64%2032%60.%20Generate%20each%20INGEST_SOURCES%20hmac_secret%20with%20%60openssl%20rand%20-hex%2032%60.&envLink=https%3A%2F%2Fgithub.com%2FdapperAuteur%2Fwitus-inbox%2Fblob%2Fmain%2F.env.example&project-name=witus-inbox&repository-name=witus-inbox&demo-url=https%3A%2F%2Finbox.witus.online&demo-title=WitUS%20Inbox&demo-description=Cross-product%20signed-webhook%20triage)
+
+The deploy button creates a Vercel project + a fork of this repo. After it deploys, **add a Neon Postgres integration** in the Vercel dashboard (Storage → Create → Neon → Production + Preview branches with `STORAGE_` env prefix), then run `npm run db:push` against each Neon branch to apply the schema. Full step-by-step: [`docs/deploy-vercel-neon.md`](./docs/deploy-vercel-neon.md).
+
 ---
 
 ## What it is
