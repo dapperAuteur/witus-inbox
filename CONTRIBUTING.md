@@ -51,7 +51,7 @@ npm run dev
 npm run smoke:bam-landing-page
 ```
 
-Expect `PASS — 200 {"ok":true,"id":"<uuid>"}`. The script lives at [`scripts/smoke-test-bam-landing-page.ts`](./scripts/smoke-test-bam-landing-page.ts) and is the reference implementation for a publisher sender.
+Expect `PASS — 200 {"ok":true,"id":"<uuid>"}`. The reference sender library lives at [`examples/sender.ts`](./examples/sender.ts) (with integration patterns in [`examples/README.md`](./examples/README.md)); the script at [`scripts/smoke-test-bam-landing-page.ts`](./scripts/smoke-test-bam-landing-page.ts) is a thin wrapper around it for end-to-end verification.
 
 ## Branching + PRs
 

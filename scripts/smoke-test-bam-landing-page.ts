@@ -1,22 +1,21 @@
 /**
  * Smoke test the bam-landing-page source.
  *
- * Reads the local Inbox dev URL and the bam-landing-page hmac_secret from
- * INGEST_SOURCES, signs a sample payload exactly the way the bam-landing-page
- * sender does, and POSTs it. Prints PASS/FAIL with the receiver's response.
+ * Looks up the bam-landing-page hmac_secret from INGEST_SOURCES, then calls
+ * the canonical sender library at examples/sender.ts to POST a fixture
+ * payload and prints PASS/FAIL.
  *
  * Usage:
  *   npm run smoke:bam-landing-page
  *
  * Environment:
- *   INBOX_URL          Defaults to http://localhost:3000/api/ingest. Override
- *                      to point at the deployed Inbox (e.g. preview URL).
- *   INGEST_SOURCES     JSON array, must include an entry with slug
- *                      "bam-landing-page" and the matching hmac_secret.
- *                      Auto-loaded from .env.local via dotenv.
+ *   INBOX_URL       Defaults to http://localhost:3000/api/ingest. Override
+ *                   to point at a deployed Inbox (e.g. preview URL).
+ *   INGEST_SOURCES  JSON array, must include an entry with slug
+ *                   "bam-landing-page". Auto-loaded from .env.local.
  */
 import { config as loadEnv } from "dotenv";
-import { createHmac } from "node:crypto";
+import { sendToInbox } from "../examples/sender";
 
 loadEnv({ path: ".env.local", quiet: true });
 loadEnv({ quiet: true });
@@ -43,53 +42,33 @@ function loadSecretFromIngestSources(): string {
 }
 
 async function main() {
-  const secret = loadSecretFromIngestSources();
-  const body = {
-    form_type: "hire",
-    submitter_email: "smoke-test@example.com",
-    submitter_name: "Smoke Test",
-    priority: "normal",
-    payload: {
-      name: "Smoke Test",
-      email: "smoke-test@example.com",
-      role_or_title: "Test role",
-      company: "Test co",
-      link: "",
-      message: "Smoke test from witus-inbox/scripts/smoke-test-bam-landing-page.ts",
-      source: "smoke-test",
-      campaign: "",
+  const result = await sendToInbox({
+    inboxUrl: INBOX_URL,
+    sourceSlug: SOURCE_SLUG,
+    hmacSecret: loadSecretFromIngestSources(),
+    submission: {
+      form_type: "hire",
+      submitter_email: "smoke-test@example.com",
+      submitter_name: "Smoke Test",
+      priority: "normal",
+      payload: {
+        name: "Smoke Test",
+        email: "smoke-test@example.com",
+        role_or_title: "Test role",
+        company: "Test co",
+        link: "",
+        message: "Smoke test from witus-inbox/scripts/smoke-test-bam-landing-page.ts",
+        source: "smoke-test",
+        campaign: "",
+      },
     },
-  };
-  const rawBody = JSON.stringify(body);
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const signature = createHmac("sha256", secret)
-    .update(`${timestamp}.${rawBody}`)
-    .digest("hex");
-
-  const res = await fetch(INBOX_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Witus-Source": SOURCE_SLUG,
-      "X-Witus-Timestamp": timestamp,
-      "X-Witus-Signature": `sha256=${signature}`,
-    },
-    body: rawBody,
   });
 
-  const text = await res.text();
-  let parsed: unknown = text;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    /* leave as text */
-  }
-
-  if (res.ok) {
-    console.log(`PASS — ${res.status} ${JSON.stringify(parsed)}`);
+  if (result.ok) {
+    console.log(`PASS — ${result.status} {"ok":true,"id":"${result.id}"}`);
     process.exit(0);
   }
-  console.error(`FAIL — ${res.status} ${JSON.stringify(parsed)}`);
+  console.error(`FAIL — ${result.status} ${result.detail ?? ""}`);
   console.error(`URL:  ${INBOX_URL}`);
   console.error(`Slug: ${SOURCE_SLUG}`);
   console.error(
