@@ -79,7 +79,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     submissionId = inserted[0]?.id;
   } catch (err) {
     // Log error code only. Drizzle includes query params (which include
-    // submitter email + payload) in its default error shape — never surface that.
+    // submitter email + payload) in its default error shape; never surface that.
     const code = err instanceof Error ? err.name : "UnknownError";
     console.error("[ingest] insert failed source=%s err=%s", source, code);
     return reject(500);

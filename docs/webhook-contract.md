@@ -2,7 +2,7 @@
 
 This is the stable surface every publisher product writes to. The receiver's job is to verify the signature, validate the payload shape, and persist the submission. Nothing about this contract changes without a major-version bump.
 
-> **Stability:** v0. Treated as v1 for compatibility purposes — breaking changes will go through a deprecation window.
+> **Stability:** v0. Treated as v1 for compatibility purposes; breaking changes will go through a deprecation window.
 
 ## At a glance
 
@@ -31,10 +31,10 @@ X-Witus-Signature: sha256=2b1c…d4f0
 |---|---|---|---|
 | `Content-Type` | yes | `application/json` | The body **MUST** be raw JSON; the receiver hashes the raw bytes. Form-urlencoded or multipart will fail signature verification even if the JSON shape is otherwise correct. |
 | `X-Witus-Source` | yes | lowercase kebab string | The publisher's source slug. Must match an entry in the receiver's `INGEST_SOURCES`. Convention: one slug per publishing host (`witus-online`, `bam-landing-page`, etc.). |
-| `X-Witus-Timestamp` | yes | unix seconds (integer string) | Used in the signature input + replay-window check. |
+| `X-Witus-Timestamp` | yes | unix seconds (integer string) | Used in the signature input and the replay-window check. |
 | `X-Witus-Signature` | yes | `sha256=<hex>` (64 hex chars after the prefix) | HMAC-SHA256, see below. The `sha256=` prefix is canonical; the receiver also accepts the bare hex form for compatibility. |
 
-Any of: missing header, malformed timestamp, slug not in `INGEST_SOURCES`, signature mismatch, or timestamp older than 5 minutes → **HTTP 401, body `{"ok":false}`**. The receiver does not distinguish failure modes in the response (no leakage); look at the receiver's server logs for the specific `[ingest]` log line.
+Any of: missing header, malformed timestamp, slug not in `INGEST_SOURCES`, signature mismatch, or timestamp older than 5 minutes returns **HTTP 401, body `{"ok":false}`**. The receiver does not distinguish failure modes in the response (no leakage); look at the receiver's server logs for the specific `[ingest]` log line.
 
 ## Payload (Zod schema)
 
@@ -50,12 +50,12 @@ Any of: missing header, malformed timestamp, slug not in `INGEST_SOURCES`, signa
 
 Field-by-field:
 
-- **`form_type`** — kebab, domain-descriptive identifier for *which* form on the publisher fired (`bvc-pilot-signup`, `coaching-intake`, `class-corvids`). Stable across versions of the publisher's UI; new versions of the same form should keep the same `form_type`.
-- **`submitter_email` / `submitter_name`** — optional because some forms don't collect them (e.g., a "give us a link to your work" survey). When present, the receiver renders them in the triage UI and uses `submitter_email` as the recipient when an admin replies.
-- **`priority`** — `"high"` triggers the SMS alert path (`MOBILE_TEXT_ALERTS_API_KEY`), if configured. Use `"high"` for inbound that could be a paying customer today. Use `"normal"` for everything else; the dashboard already shows new rows.
-- **`payload`** — the raw form fields. The receiver stores this as JSONB, so keep keys snake_case for readability in the triage UI's auto-generated label rows. Nested objects/arrays render as collapsed JSON.
+- **`form_type`**: kebab, domain-descriptive identifier for *which* form on the publisher fired (`bvc-pilot-signup`, `coaching-intake`, `class-corvids`). Stable across versions of the publisher's UI; new versions of the same form should keep the same `form_type`.
+- **`submitter_email` / `submitter_name`**: optional because some forms don't collect them (for example, a "give us a link to your work" survey). When present, the receiver renders them in the triage UI and uses `submitter_email` as the recipient when an admin replies.
+- **`priority`**: `"high"` triggers the SMS alert path (`MOBILE_TEXT_ALERTS_API_KEY`), if configured. Use `"high"` for inbound that could be a paying customer today. Use `"normal"` for everything else; the dashboard already shows new rows.
+- **`payload`**: the raw form fields. The receiver stores this as JSONB, so keep keys snake_case for readability in the triage UI's auto-generated label rows. Nested objects and arrays render as collapsed JSON.
 
-Schema-invalid bodies (missing `form_type`, wrong type for a field, etc.) → **HTTP 400, body `{"ok":false}`**.
+Schema-invalid bodies (missing `form_type`, wrong type for a field, etc.) return **HTTP 400, body `{"ok":false}`**.
 
 ## Signing algorithm
 
@@ -67,7 +67,7 @@ signature = HMAC_SHA256(
 header = "sha256=" + hex(signature)
 ```
 
-The dot between timestamp and rawBody is literal. The rawBody is the **exact bytes** the publisher sends as the request body — not a re-serialized JSON object. Hash before any framework middleware can touch the bytes.
+The dot between timestamp and rawBody is literal. The rawBody is the **exact bytes** the publisher sends as the request body, not a re-serialized JSON object. Hash before any framework middleware can touch the bytes.
 
 Verification on the receiver:
 
@@ -85,7 +85,7 @@ The constant-time compare is the [`timingSafeEqual`](https://nodejs.org/api/cryp
 openssl rand -hex 32   # 64 hex chars, 32 bytes of entropy
 ```
 
-The receiver enforces this via Zod; an entry below the minimum invalidates the entire `INGEST_SOURCES` array (loader returns an empty map → every request comes back "unknown source"). This is intentional: a misconfigured deploy fails closed, not into weak-key territory.
+The receiver enforces this via Zod; an entry below the minimum invalidates the entire `INGEST_SOURCES` array (the loader returns an empty map, so every request comes back "unknown source"). The fail-closed shape is intentional: a misconfigured deploy doesn't fall through into weak-key territory.
 
 ### Per-environment secrets
 
@@ -107,7 +107,7 @@ Production, preview, and local dev each get **distinct** secrets. Rotating one e
 | 400 | JSON valid, payload schema rejected | `[ingest] schema invalid source=…` |
 | 500 | Database error | `[ingest] insert failed source=… err=<class>` (PII never logged) |
 
-**The body for every non-success is `{"ok":false}`** — no diagnostic detail in the response. Diagnostics live on the receiver side only, by design.
+**The body for every non-success is `{"ok":false}`** with no diagnostic detail in the response. Diagnostics live on the receiver side only, on purpose.
 
 ## Working `curl` example
 
@@ -146,7 +146,7 @@ If you get 401 with no further body: re-check the source slug and the secret-str
 
 ## Sender stub (pseudo-code)
 
-A drop-in TypeScript sender lives at [`examples/sender.ts`](../examples/sender.ts) — copy-paste it into your publisher product. Integration patterns for Next.js Server Actions, Express, and other-language senders are in [`examples/README.md`](../examples/README.md). The pseudo-code below is language-agnostic:
+A drop-in TypeScript sender lives at [`examples/sender.ts`](../examples/sender.ts). Copy-paste it into your publisher product. Integration patterns for Next.js Server Actions, Express, and other-language senders are in [`examples/README.md`](../examples/README.md). The pseudo-code below is language-agnostic:
 
 ```
 function sendToInbox(formData):
@@ -184,10 +184,10 @@ Three rules for sender authors:
 
 1. **Sign the exact bytes you send.** Don't re-serialize between hashing and POSTing. JSON whitespace, key order, and number formatting all matter for the hash.
 2. **Don't block the user.** Send to the receiver after the user-facing response is already rendered (Next.js's `after()`, a fire-and-forget `fetch` with logged-not-thrown errors, etc.).
-3. **Log at most `source` + `form_type` + the HTTP status.** Never log the body, the secret, or the signature.
+3. **Log at most `source`, `form_type`, and the HTTP status.** Never log the body, the secret, or the signature.
 
 ## Versioning
 
-The contract is versioned by major-version repository tag. v0 (current) and v1 are wire-compatible. A v2 with a breaking change (e.g., new required header, payload-schema field promoted from optional to required) would ship with a 90-day deprecation window during which both versions are accepted, controlled by a `X-Witus-Contract-Version: 1` header that defaults to `1` when absent.
+The contract is versioned by major-version repository tag. v0 (current) and v1 are wire-compatible. A v2 with a breaking change (for example, a new required header, or a payload-schema field promoted from optional to required) would ship with a 90-day deprecation window during which both versions are accepted, controlled by a `X-Witus-Contract-Version: 1` header that defaults to `1` when absent.
 
-If you fork to add a contract change for your own ecosystem, please don't reuse the `X-Witus-*` header namespace — pick your own (`X-MyCo-*`) so anyone running both can keep them straight.
+If you fork to add a contract change for your own ecosystem, please don't reuse the `X-Witus-*` header namespace. Pick your own (`X-MyCo-*`) so anyone running both can keep them straight.

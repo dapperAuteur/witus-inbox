@@ -3,17 +3,17 @@
  *
  * Copy this file into your publisher product (or import from this repo) and
  * call `sendToInbox(...)` after your form's user-facing response is rendered.
- * Designed to be dependency-free apart from Node's built-in `crypto` module
- * and the runtime `fetch`.
+ * Dependency-free apart from Node's built-in `crypto` module and the runtime
+ * `fetch`.
  *
  * Contract: see ../docs/webhook-contract.md.
  *
  * Three rules for callers:
  *   1. Sign the exact bytes you send. Don't re-serialize JSON between hashing
- *      and POSTing — whitespace, key order, and number formatting matter.
+ *      and POSTing; whitespace, key order, and number formatting matter.
  *   2. Don't block the user-facing response on this. Fire-and-forget after
- *      your "thank you" page renders (e.g. via Next.js `after()`).
- *   3. Log at most `source` + `form_type` + the HTTP status. Never log the
+ *      your "thank you" page renders (for example, via Next.js `after()`).
+ *   3. Log at most `source`, `form_type`, and the HTTP status. Never log the
  *      submission body, the secret, or the signature.
  */
 import { createHmac } from "node:crypto";

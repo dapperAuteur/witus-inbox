@@ -20,7 +20,7 @@ export function ReplyComposer({
   if (!submitterEmail) {
     return (
       <p className="text-sm text-slate-500">
-        Reply unavailable — this submission has no submitter email.
+        Reply unavailable. This submission has no submitter email.
       </p>
     );
   }
@@ -37,7 +37,7 @@ export function ReplyComposer({
       });
       if (!res.ok) {
         if (res.status === 502) {
-          setError("Email could not be sent. Mailgun rejected the request — try again.");
+          setError("Email could not be sent. Mailgun rejected the request. Try again.");
         } else if (res.status === 422) {
           setError("No submitter email on file; reply not supported for this submission.");
         } else {
