@@ -27,6 +27,15 @@ export async function sendMail(args: SendArgs): Promise<SendResult> {
   const domain = env.MAILGUN_DOMAIN;
 
   if (!apiKey || !domain) {
+    if (process.env.VERCEL_ENV === "production") {
+      console.error(
+        "[mailgun] refusing to send: MAILGUN_API_KEY or MAILGUN_DOMAIN unset in production"
+      );
+      return {
+        ok: false,
+        detail: "mailgun creds missing in production",
+      };
+    }
     console.warn(
       "[mailgun] MAILGUN_API_KEY or MAILGUN_DOMAIN missing. Logging payload instead of sending (dev mode)."
     );
