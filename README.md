@@ -51,7 +51,7 @@ Every external dependency has a no-op / dev-log fallback so you can run the rece
 
 ## Quick start
 
-> Detailed deploy guide arrives at `docs/deploy-vercel-neon.md` before launch.
+> Full deploy guide: [`docs/deploy-vercel-neon.md`](./docs/deploy-vercel-neon.md) — Vercel + Neon end-to-end with Production + Preview environments configured for PII safety.
 
 ```bash
 git clone https://github.com/dapperAuteur/witus-inbox.git
