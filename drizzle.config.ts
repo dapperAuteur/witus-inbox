@@ -5,8 +5,8 @@ import { config as loadEnv } from "dotenv";
 // runs outside the Next runtime and only sees what `dotenv` loads for it.
 // Load `.env.local` first (Next's convention for machine-local secrets),
 // then `.env` as a fallback so CI-style setups that only ship a `.env` work.
-loadEnv({ path: ".env.local" });
-loadEnv();
+loadEnv({ path: ".env.local", quiet: true });
+loadEnv({ quiet: true });
 
 const migrationUrl =
   process.env.STORAGE_DATABASE_URL_UNPOOLED ?? process.env.STORAGE_DATABASE_URL;
