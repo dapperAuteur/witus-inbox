@@ -4,7 +4,9 @@ import { getEnv } from "./env";
 
 const SourceEntry = z.object({
   slug: z.string().min(1),
-  hmac_secret: z.string().min(16),
+  hmac_secret: z
+    .string()
+    .min(32, "hmac_secret must be at least 32 chars; generate via `openssl rand -hex 32`"),
 });
 const SourcesSchema = z.array(SourceEntry);
 
