@@ -1,6 +1,6 @@
 # Contributing to WitUS Inbox
 
-Thanks for considering a contribution. This is a single-operator tool open-sourced for reuse — its scope is intentionally narrow. Reading this file before opening a PR will save us both time.
+Thanks for considering a contribution. This is a single-operator tool, open-sourced for reuse, and its scope is intentionally narrow. Reading this file before opening a PR will save us both time.
 
 ## Scope
 
@@ -14,8 +14,8 @@ In scope:
 
 Out of scope (please open a discussion first):
 
-- Multi-tenant mode. The tool is single-operator by design.
-- Any change to the **signed-webhook contract** (headers, signing algorithm, replay window, payload shape). The contract is the project's stable surface — publisher products and forks depend on it not moving. Open a design issue first; expect skepticism.
+- Multi-tenant mode. The tool is single-operator on purpose.
+- Any change to the **signed-webhook contract** (headers, signing algorithm, replay window, payload shape). The contract is the project's stable surface, and publisher products plus forks depend on it not moving. Open a design issue first; expect skepticism.
 - Replacing one of the default integrations (Mailgun, Mailgun SMTP, Neon, Mobile Text Alerts) with a different default.
 - "Big rewrite" PRs. Small, atomic changes get reviewed; large ones tend to bit-rot.
 
@@ -32,7 +32,7 @@ cp .env.example .env.local
 #   NEXTAUTH_SECRET               (`openssl rand -base64 32`)
 #   NEXTAUTH_URL                  (http://localhost:3000 for local dev)
 #   EMAIL_SERVER + EMAIL_FROM     (Mailgun SMTP creds, or omit for dev-log)
-#   INGEST_SOURCES                (one entry per publisher; secrets ≥32 chars)
+#   INGEST_SOURCES                (one entry per publisher; secrets >= 32 chars)
 
 npm install
 npm run db:push       # apply schema to your Neon branch
@@ -51,9 +51,9 @@ npm run dev
 npm run smoke:bam-landing-page
 ```
 
-Expect `PASS — 200 {"ok":true,"id":"<uuid>"}`. The reference sender library lives at [`examples/sender.ts`](./examples/sender.ts) (with integration patterns in [`examples/README.md`](./examples/README.md)); the script at [`scripts/smoke-test-bam-landing-page.ts`](./scripts/smoke-test-bam-landing-page.ts) is a thin wrapper around it for end-to-end verification.
+Expect `PASS: 200 {"ok":true,"id":"<uuid>"}`. The reference sender library lives at [`examples/sender.ts`](./examples/sender.ts), with integration patterns in [`examples/README.md`](./examples/README.md). The script at [`scripts/smoke-test-bam-landing-page.ts`](./scripts/smoke-test-bam-landing-page.ts) is a thin wrapper around it for end-to-end verification.
 
-## Branching + PRs
+## Branching and PRs
 
 - Branch off `main`. Naming: `feat/<slug>`, `fix/<slug>`, `docs/<slug>`, `chore/<slug>`.
 - One concern per PR. Multiple commits OK; mixing concerns is not.
@@ -72,7 +72,7 @@ Expect `PASS — 200 {"ok":true,"id":"<uuid>"}`. The reference sender library li
 - Tailwind v4 utility classes; avoid inline `style=` for non-dynamic values.
 - Mobile-first (360px), keyboard-reachable, visible focus rings.
 - DB writes that touch PII-bearing columns (`submission.submitter_email`, `submission.payload`, `reply.body`) **must be wrapped in try/catch** and only log error class names, not query params. Drizzle's default error shape leaks parameters; never let it reach `console.error` directly.
-- Log `source`, `form_type`, `submission_id` only — never `payload_json` content, submitter email, or recipient phone numbers.
+- Log `source`, `form_type`, and `submission_id` only. Never log `payload_json` content, submitter email, or recipient phone numbers.
 
 ## Reporting bugs
 

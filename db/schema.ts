@@ -71,7 +71,7 @@ export const webhookSources = pgTable("webhook_source", {
     .defaultNow(),
 });
 
-/** NextAuth tables — standard @auth/drizzle-adapter shape. */
+/** NextAuth tables. Standard @auth/drizzle-adapter shape. */
 export const users = pgTable("user", {
   id: text("id")
     .primaryKey()

@@ -4,7 +4,7 @@ Reference code for callers wiring their publisher products to a WitUS Inbox rece
 
 | File | Purpose |
 |---|---|
-| [`sender.ts`](./sender.ts) | Dependency-free TypeScript sender library. Single exported function `sendToInbox`. ~75 lines. Copy into your publisher product or import from this repo. |
+| [`sender.ts`](./sender.ts) | Dependency-free TypeScript sender library. Single exported function `sendToInbox`. About 75 lines. Copy into your publisher product or import from this repo. |
 
 ## Quickest possible integration
 
@@ -29,7 +29,7 @@ if (!result.ok) {
 }
 ```
 
-The function returns `{ ok, status, id?, detail? }`. On success, `id` is the submission UUID the receiver assigned. On failure, `status` is the HTTP code and `detail` is the raw response body — useful for the rare debugging session, not for production logs.
+The function returns `{ ok, status, id?, detail? }`. On success, `id` is the submission UUID the receiver assigned. On failure, `status` is the HTTP code and `detail` is the raw response body (useful for the rare debugging session, not for production logs).
 
 ## Use from a Next.js Server Action
 
@@ -63,7 +63,7 @@ export async function submitContactForm(formData: FormData) {
 }
 ```
 
-`after()` keeps the network call off the user's response path. The submitter sees their thank-you page in <100ms; the inbox handoff happens in the background.
+`after()` keeps the network call off the user's response path. The submitter sees their thank-you page in under 100ms; the inbox handoff happens in the background.
 
 ## Use from an Express / Hono / Fastify handler
 
@@ -93,9 +93,9 @@ app.post("/api/contact", async (req, res) => {
 
 ## Sender from another language
 
-Any HTTP client + HMAC-SHA256 library will do. The only invariants:
+Any HTTP client and HMAC-SHA256 library will do. The only invariants:
 
-1. Sign **exactly** `${unix_timestamp}.${request_body_bytes}` — no trimming, no re-encoding.
+1. Sign **exactly** `${unix_timestamp}.${request_body_bytes}`. No trimming, no re-encoding.
 2. Send the same `request_body_bytes` you signed, byte-for-byte. JSON whitespace and key order are part of the signature.
 3. Header names are lowercase-with-hyphens-via-HTTP-convention but you'll usually write them as `X-Witus-Source`, `X-Witus-Timestamp`, `X-Witus-Signature`.
 
@@ -103,6 +103,6 @@ A working `curl` reference lives in [`docs/webhook-contract.md`](../docs/webhook
 
 ## What's NOT here
 
-- A "test runner" CLI — see [`scripts/smoke-test-bam-landing-page.ts`](../scripts/smoke-test-bam-landing-page.ts) for an opinionated end-to-end smoke test you can adapt to your own slug.
-- Inbound reply handling — that's a v1 receiver feature, not a sender concern.
-- A retry queue — fire-and-forget is the contract. If you need durable delivery, wrap `sendToInbox` in your queue of choice (BullMQ, Vercel Queues, etc.) and retry on `result.ok === false`.
+- A "test runner" CLI. See [`scripts/smoke-test-bam-landing-page.ts`](../scripts/smoke-test-bam-landing-page.ts) for an opinionated end-to-end smoke test you can adapt to your own slug.
+- Inbound reply handling. That's a v1 receiver feature, not a sender concern.
+- A retry queue. Fire-and-forget is the contract. If you need durable delivery, wrap `sendToInbox` in your queue of choice (BullMQ, Vercel Queues, etc.) and retry on `result.ok === false`.

@@ -10,7 +10,7 @@
  *
  * Environment:
  *   INBOX_URL       Defaults to http://localhost:3000/api/ingest. Override
- *                   to point at a deployed Inbox (e.g. preview URL).
+ *                   to point at a deployed Inbox (for example, a preview URL).
  *   INGEST_SOURCES  JSON array, must include an entry with slug
  *                   "bam-landing-page". Auto-loaded from .env.local.
  */
@@ -65,10 +65,10 @@ async function main() {
   });
 
   if (result.ok) {
-    console.log(`PASS — ${result.status} {"ok":true,"id":"${result.id}"}`);
+    console.log(`PASS: ${result.status} {"ok":true,"id":"${result.id}"}`);
     process.exit(0);
   }
-  console.error(`FAIL — ${result.status} ${result.detail ?? ""}`);
+  console.error(`FAIL: ${result.status} ${result.detail ?? ""}`);
   console.error(`URL:  ${INBOX_URL}`);
   console.error(`Slug: ${SOURCE_SLUG}`);
   console.error(
@@ -81,6 +81,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("FAIL — script error:", err instanceof Error ? err.message : err);
+  console.error("FAIL: script error:", err instanceof Error ? err.message : err);
   process.exit(2);
 });

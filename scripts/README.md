@@ -2,7 +2,7 @@
 
 | Script | Purpose |
 |---|---|
-| `smoke-test-bam-landing-page.ts` | Validates the `bam-landing-page` source slug + `hmac_secret` are correctly configured in `INGEST_SOURCES`. Runs against `INBOX_URL` (defaults to local dev `http://localhost:3000/api/ingest`). PASS = receiver returned 2xx; FAIL prints the failure mode. Auto-loads `.env.local` via dotenv. |
+| `smoke-test-bam-landing-page.ts` | Validates that the `bam-landing-page` source slug and `hmac_secret` are correctly configured in `INGEST_SOURCES`. Runs against `INBOX_URL` (defaults to local dev `http://localhost:3000/api/ingest`). PASS means the receiver returned 2xx; FAIL prints the failure mode. Auto-loads `.env.local` via dotenv. |
 
 ## Usage
 
@@ -11,12 +11,12 @@
 npm run dev                     # in one terminal
 npm run smoke:bam-landing-page  # in another
 
-# Against a deployed Inbox (e.g. preview)
+# Against a deployed Inbox (for example, preview)
 INBOX_URL=https://your-preview.vercel.app/api/ingest \
   npm run smoke:bam-landing-page
 ```
 
-Expect `PASS — 200 {"ok":true,"id":"<uuid>"}`. Then check the triage UI or the `submission` table to confirm the row landed with `source=bam-landing-page` and `form_type=hire`.
+Expect `PASS: 200 {"ok":true,"id":"<uuid>"}`. Then check the triage UI or the `submission` table to confirm the row landed with `source=bam-landing-page` and `form_type=hire`.
 
 ## Pre-req
 

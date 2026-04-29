@@ -17,7 +17,7 @@ export interface SendResult {
 }
 
 /**
- * Thin Mailgun wrapper — ported from witus.online. POSTs to api.mailgun.net.
+ * Thin Mailgun wrapper, ported from witus.online. POSTs to api.mailgun.net.
  * Dev-mode contract: if MAILGUN_API_KEY or MAILGUN_DOMAIN is missing, logs
  * the payload and returns ok: true with detail="dev-log".
  */
