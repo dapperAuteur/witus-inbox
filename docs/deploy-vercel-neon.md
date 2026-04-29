@@ -88,6 +88,7 @@ In Vercel → **Settings → Environment Variables → Production**, add:
 | `ADMIN_EMAIL` | `you@your-domain.example` | The only address that can sign in. Magic links to other addresses get rejected by the auth callback. |
 | `MAILGUN_API_KEY` | from Mailgun dashboard | Used by the reply composer for outbound mail via Mailgun's HTTP API. |
 | `MAILGUN_DOMAIN` | `mg.your-domain.example` | Same subdomain as `EMAIL_SERVER`. |
+| `MAILGUN_WEBHOOK_SIGNING_KEY` | from Mailgun → Sending → Webhooks | Required for inbound reply threading. The `/api/inbound-email` route refuses every request without it. Distinct from `MAILGUN_API_KEY`. |
 | `BVC_SUBMISSIONS_EMAIL` | `submissions@your-domain.example` | DR archive address every publisher product also emails. Optional; defaults to a witus-specific address that you'll want to override. |
 | `INGEST_SOURCES` | `[{"slug":"my-publisher","hmac_secret":"<openssl rand -hex 32>"}]` | One entry per publisher product. `hmac_secret` MUST be ≥32 chars. |
 | `MOBILE_TEXT_ALERTS_API_KEY` | from MTA dashboard | Optional. Without it, `lib/sms.ts` falls back to dev-log. |
@@ -141,7 +142,23 @@ Watch the build log. Common first-time failures:
 2. Vercel shows the CNAME / A record value. Add it at your DNS provider.
 3. Wait for DNS propagation (a few minutes typically).
 4. Update `NEXTAUTH_URL` in Production to `https://inbox.your-domain.example` if you didn't already.
-5. **DKIM/SPF for Mailgun.** In your DNS provider, add the records Mailgun showed you when you set up `mg.your-domain.example`. Typically one TXT for SPF (`v=spf1 include:mailgun.org ~all`) and one TXT for DKIM. If these aren't in place, magic-link emails will land in Spam (or be silently dropped) by Gmail or Outlook.
+5. **DKIM/SPF for Mailgun.** In your DNS provider, add the records Mailgun showed you when you set up `mg.your-domain.example` — typically one TXT for SPF (`v=spf1 include:mailgun.org ~all`) and one TXT for DKIM. If these aren't in place, magic-link emails will land in Spam (or be silently dropped) by Gmail/Outlook.
+6. **MX records for inbound** (only if you want submitter-reply threading). Add Mailgun's two MX records to `mg.your-domain.example` (`10 mxa.mailgun.org`, `10 mxb.mailgun.org`). Without these, Mailgun cannot accept inbound mail for your subdomain and Step 7b's route will never fire.
+
+---
+
+## 7a. Inbound route for submitter-reply threading (optional)
+
+If you want submitter replies to appear in the Inbox triage UI as a threaded conversation (instead of routing to your DR archive Gmail and being invisible to the Inbox), configure a Mailgun route:
+
+1. Vercel → **Settings → Environment Variables → Production** → set `MAILGUN_WEBHOOK_SIGNING_KEY` (from Mailgun → Sending → Webhooks).
+2. Mailgun dashboard → **Receiving → Routes → Create Route**:
+   - **Filter expression:** `match_recipient("^inbox\\+.+@mg.your-domain.example$")`
+   - **Action:** `forward("https://inbox.your-domain.example/api/inbound-email")` and `stop()`
+   - **Priority:** 0
+3. Save. Send a test reply to a submission and verify it lands as an inbound row in the detail view's history section.
+
+If `MAILGUN_WEBHOOK_SIGNING_KEY` is unset on your deploy, the inbound route silently 503s every request from Mailgun, so the conversation falls back to your DR archive Gmail. That's a reasonable opt-out: leave the env var unset and you'll get the simpler one-way behavior.
 
 ---
 

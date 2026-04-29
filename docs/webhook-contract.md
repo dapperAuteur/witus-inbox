@@ -186,6 +186,18 @@ Three rules for sender authors:
 2. **Don't block the user.** Send to the receiver after the user-facing response is already rendered (Next.js's `after()`, a fire-and-forget `fetch` with logged-not-thrown errors, etc.).
 3. **Log at most `source`, `form_type`, and the HTTP status.** Never log the body, the secret, or the signature.
 
+## Inbound replies (submitter → inbox)
+
+If your inbox has the inbound route configured (see `docs/deploy-vercel-neon.md` §7a), submitter replies thread back into the same submission's history. The wiring:
+
+1. Outbound replies the inbox sends out carry a per-submission `Reply-To: inbox+<submission-uuid>@<MAILGUN_DOMAIN>`.
+2. When the submitter clicks Reply, their mail client routes the reply to that subaddress.
+3. Mailgun's MX accepts it. A receiving route forwards the parsed message to `POST /api/inbound-email` on the inbox.
+4. The inbox verifies the Mailgun webhook signature (HMAC-SHA256 over `${timestamp}${token}` with the `MAILGUN_WEBHOOK_SIGNING_KEY`), extracts the submission UUID from the recipient subaddress, and inserts a `replies` row with `direction='inbound'`.
+5. If the submission's status was `replied` or `closed`, it's flipped back to `in_progress` so the row resurfaces in the triage queue.
+
+This is opt-in. With `MAILGUN_WEBHOOK_SIGNING_KEY` unset, the inbox sends outbound replies normally and submitter replies fall through to whatever your `Reply-To` setup was previously (typically your DR archive Gmail). The inbox's `/api/inbound-email` route returns 503 for every request in that case, so Mailgun retries decay quickly.
+
 ## Versioning
 
 The contract is versioned by major-version repository tag. v0 (current) and v1 are wire-compatible. A v2 with a breaking change (for example, a new required header, or a payload-schema field promoted from optional to required) would ship with a 90-day deprecation window during which both versions are accepted, controlled by a `X-Witus-Contract-Version: 1` header that defaults to `1` when absent.

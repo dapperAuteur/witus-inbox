@@ -21,6 +21,10 @@ const EnvSchema = z.object({
   ADMIN_EMAIL: z.string().email(),
   MAILGUN_API_KEY: z.string().optional(),
   MAILGUN_DOMAIN: z.string().optional(),
+  // Mailgun's HTTP webhook signing key (separate from MAILGUN_API_KEY).
+  // Required if /api/inbound-email is exposed; without it, the inbound
+  // route refuses every incoming request.
+  MAILGUN_WEBHOOK_SIGNING_KEY: z.string().optional(),
   BVC_SUBMISSIONS_EMAIL: z
     .string()
     .email()

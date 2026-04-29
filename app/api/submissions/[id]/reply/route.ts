@@ -86,10 +86,21 @@ export async function POST(
     parsed.data.subject ?? `Re: your ${submission.source}/${submission.formType} submission`;
   const env = getEnv();
 
+  // Per-submission Reply-To. Submitter replies route to
+  // `inbox+<submission-id>@<MAILGUN_DOMAIN>`, which Mailgun's inbound route
+  // catches and forwards to /api/inbound-email; the handler attaches the
+  // reply to this submission's history. Falls back to the shared
+  // BVC_SUBMISSIONS_EMAIL archive if MAILGUN_DOMAIN is somehow unset (the
+  // production guard in lib/mailgun.ts already refuses to send in that
+  // case, so this fallback is belt-and-braces only).
+  const replyTo = env.MAILGUN_DOMAIN
+    ? `inbox+${id}@${env.MAILGUN_DOMAIN}`
+    : env.BVC_SUBMISSIONS_EMAIL;
+
   const mailResult = await sendMail({
     to: submission.submitterEmail,
     from: inboxFromAddress(),
-    replyTo: env.BVC_SUBMISSIONS_EMAIL,
+    replyTo,
     subject,
     text: parsed.data.body,
     headers: {

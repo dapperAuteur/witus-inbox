@@ -108,7 +108,7 @@ A working sender library lives at [`examples/sender.ts`](./examples/sender.ts). 
 
 `/inbox` lists submissions newest-first with source / form-type / status filters. `/inbox/[id]` opens a detail view: humanized payload, a status select (`new` → `in_progress` → `replied` → `waiting` → `closed`), and a reply composer that sends via Mailgun and threads outbound replies into a history list.
 
-Inbound reply threading (parsing replies your submitters send back into the thread) is on the v1 roadmap.
+**Inbound reply threading** is wired. Each outbound reply is sent with a per-submission Reply-To address (`inbox+<submission-id>@<MAILGUN_DOMAIN>`); when the submitter replies, Mailgun's inbound route forwards the email to `/api/inbound-email`, which verifies the webhook signature and appends the message to the submission's history. Replied / closed submissions resurface to `in_progress` so they re-enter the triage queue. The Mailgun inbound route is a one-time operator setup; see [`docs/deploy-vercel-neon.md`](./docs/deploy-vercel-neon.md).
 
 ## Contributing
 
