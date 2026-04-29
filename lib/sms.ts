@@ -22,6 +22,15 @@ export async function sendSms(args: SmsArgs): Promise<SmsResult> {
   const recipients = args.recipients ?? envRecipients;
 
   if (!apiKey || recipients.length === 0) {
+    if (process.env.VERCEL_ENV === "production") {
+      console.error(
+        "[sms] refusing to send: MOBILE_TEXT_ALERTS_API_KEY or recipients missing in production"
+      );
+      return {
+        ok: false,
+        detail: "mta creds missing in production",
+      };
+    }
     console.warn(
       "[sms] MOBILE_TEXT_ALERTS_API_KEY or recipients missing. Dev-log fallback."
     );
