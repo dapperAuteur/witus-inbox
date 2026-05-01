@@ -1,0 +1,64 @@
+name: Feature request
+description: Propose a new feature or change.
+title: "[feature] "
+labels: ["feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, read [CONTRIBUTING.md → Scope](../CONTRIBUTING.md). The project is intentionally narrow:
+
+        - Multi-tenant mode is out of scope.
+        - The signed-webhook contract is stable; changes need the **"Webhook contract change"** issue template, not this one.
+        - Replacing default integrations (Mailgun, Neon, Mobile Text Alerts) needs a discussion, not a PR.
+
+        If your feature falls into any of those, expect skepticism. If it's an additive optional integration, accessibility / a11y / i18n improvement, or doc clarification, you're in the right place.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the user-facing pain. Skip if the request is purely internal (refactor, tooling).
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: One paragraph. Reference files / functions if you can.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else did you consider, and why not those?
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Best guess. Maintainer may move.
+      options:
+        - Bug fix or compatibility shim
+        - New optional integration (opt-in module)
+        - Documentation
+        - Accessibility / a11y / i18n
+        - Performance
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I read CONTRIBUTING.md and this isn't out-of-scope.
+          required: true
+        - label: This isn't a webhook contract change.
+          required: true
+        - label: This isn't a security vulnerability.
+          required: true

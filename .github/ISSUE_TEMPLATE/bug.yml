@@ -1,0 +1,75 @@
+name: Bug report
+description: Something is broken or behaves contrary to the documentation.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Before submitting, please confirm:
+        - You're on the latest commit on `main` (or note the commit SHA you're testing).
+        - The behavior is reproducible.
+        - You're not reporting a security vulnerability (those go to a@awews.com per [SECURITY.md](../SECURITY.md), not here).
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA
+      description: Output of `git rev-parse HEAD` in your local checkout.
+      placeholder: e.g. 0a8d57f
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps starting from a known state.
+      placeholder: |
+        1. Clone the repo at <commit>.
+        2. cp .env.example .env.local; fill in <these vars>.
+        3. npm run dev.
+        4. Open http://localhost:3000/...
+        5. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include any relevant log lines (server stderr, browser console). Redact secrets and PII.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        - Node version (`node -v`)
+        - npm version (`npm -v`)
+        - OS / shell
+        - Browser (if a UI bug)
+        - Deploy target (Vercel Production / Preview / local dev)
+      value: |
+        - Node:
+        - npm:
+        - OS:
+        - Browser:
+        - Deploy target:
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional notes
+      description: Hunches, suspected files, related issues.
