@@ -1,17 +1,25 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { getEnv } from "./env";
 
-// Mobile Text Alerts API. Verify endpoint + body shape against the current
-// MTA dashboard when activating the key (plans/user-tasks/03-mobile-text-alerts-env.md §A.5-6).
-const MTA_ENDPOINT = "https://api.mobile-text-alerts.com/send";
+// Mobile Text Alerts API v3. See:
+// https://developers.mobile-text-alerts.com/api-reference/send
+const MTA_ENDPOINT = "https://api.mobile-text-alerts.com/v3/send";
 
 export interface SmsArgs {
   text: string;
   recipients?: string[];
+  /**
+   * Optional idempotency token. If a previous request with the same
+   * X-Request-Id was already accepted, MTA returns 409 instead of sending
+   * a duplicate. We auto-generate one when absent.
+   */
+  requestId?: string;
 }
 
 export interface SmsResult {
   ok: boolean;
+  /** MTA's `data.messageId` on success; an error code or short reason on failure. */
   detail?: string;
 }
 
@@ -38,26 +46,43 @@ export async function sendSms(args: SmsArgs): Promise<SmsResult> {
     return { ok: true, detail: "dev-log" };
   }
 
+  const requestId = args.requestId ?? randomUUID().replace(/-/g, "");
+
   try {
     const res = await fetch(MTA_ENDPOINT, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        "X-Request-Id": requestId,
       },
       body: JSON.stringify({
         message: args.text,
-        phoneNumbers: recipients,
+        subscribers: recipients,
       }),
       cache: "no-store",
     });
-    if (!res.ok) {
-      return { ok: false, detail: `MTA ${res.status}` };
+    // 409 means MTA already accepted a request with this X-Request-Id.
+    // Treat as success — the prior request did the send; no duplicate.
+    if (res.status === 409) {
+      return { ok: true, detail: "duplicate-suppressed" };
     }
-    const data = (await res.json().catch(() => ({}))) as { id?: string };
-    return { ok: true, detail: data.id };
+    if (!res.ok) {
+      const errBody = (await res.json().catch(() => ({}))) as {
+        type?: string;
+        message?: string;
+      };
+      const reason = errBody.type ?? `mta-${res.status}`;
+      return { ok: false, detail: reason };
+    }
+    const body = (await res.json().catch(() => ({}))) as {
+      success?: boolean;
+      data?: { messageId?: string };
+    };
+    return { ok: true, detail: body.data?.messageId };
   } catch (err) {
-    return { ok: false, detail: `MTA fetch failed: ${String(err)}` };
+    const code = err instanceof Error ? err.name : "UnknownError";
+    return { ok: false, detail: `mta-fetch-${code}` };
   }
 }
 
