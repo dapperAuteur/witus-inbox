@@ -1,0 +1,82 @@
+name: Webhook contract change proposal
+description: Propose a change to the signed-webhook contract (headers, payload shape, signing algorithm, replay window).
+title: "[contract] "
+labels: ["contract-change", "needs-discussion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The signed-webhook contract is the project's stable interop surface. Publisher products and forks depend on it not moving. **Per [CONTRIBUTING.md → Scope](../CONTRIBUTING.md), changes need a design issue (this one) before a PR.**
+
+        Read [docs/webhook-contract.md](../docs/webhook-contract.md) first. Most "I want to add a header" or "I want to change the algorithm" requests are better served by a fork using your own `X-MyCo-*` namespace.
+
+        Expect skepticism. The bar for accepting a contract change is high.
+
+  - type: dropdown
+    id: change-type
+    attributes:
+      label: What's changing?
+      options:
+        - New header (additive, optional)
+        - Existing header semantics
+        - Payload schema (new field, optional)
+        - Payload schema (new field, required) — breaking
+        - Signing algorithm
+        - Replay window
+        - Failure-mode response shape
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Why?
+      description: Concrete use case. "It would be nice to have" is not enough.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: |
+        Spec the change in the same shape as docs/webhook-contract.md uses. Include:
+        - The exact header / field / algorithm / value.
+        - How the receiver verifies / parses.
+        - How a publisher generates the new value.
+    validations:
+      required: true
+
+  - type: textarea
+    id: compat
+    attributes:
+      label: Backward compatibility
+      description: |
+        - Is this additive (a v0 sender's request still verifies and persists)?
+        - Or breaking (existing senders need to update)?
+        - If breaking: deprecation window proposal.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: |
+        - Why can't this be solved by forking with your own header namespace?
+        - Why can't this live in the publisher / receiver as a private extension?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I read docs/webhook-contract.md.
+          required: true
+        - label: I considered forking with my own header namespace and rejected it for a reason I've explained above.
+          required: true
+        - label: I'm not in a hurry. Contract changes go through a discussion period before any PR is reviewed.
+          required: true
