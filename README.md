@@ -118,6 +118,10 @@ Read [`CONTRIBUTING.md`](./CONTRIBUTING.md) before opening a PR. The webhook con
 
 Found a vulnerability? See [`SECURITY.md`](./SECURITY.md). Don't open a public issue.
 
+## Roadmap and changelog
+
+Public roadmap at [`docs/roadmap.md`](./docs/roadmap.md). Notable changes per release at [`CHANGELOG.md`](./CHANGELOG.md).
+
 ## License
 
 [MIT](./LICENSE) © 2026 Brand Anthony McDonald
