@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Stub env vars so lib/env.ts Zod validation passes during `next build`.
+    # These satisfy the schema shape only; nothing in CI sends real mail or
+    # connects to a real database. Production / Preview deploys get the real
+    # values from Vercel's env.
+    env:
+      STORAGE_DATABASE_URL: postgresql://stub:stub@stub.invalid:5432/stub
+      STORAGE_DATABASE_URL_UNPOOLED: postgresql://stub:stub@stub.invalid:5432/stub
+      NEXTAUTH_SECRET: ci-stub-secret-placeholder-1234567890
+      EMAIL_SERVER: smtp://nobody:none@localhost:25
+      EMAIL_FROM: WitUS Inbox <inbox@example.com>
+      ADMIN_EMAIL: ci@example.com
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
