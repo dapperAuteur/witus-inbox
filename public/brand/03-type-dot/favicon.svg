@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" role="img" aria-label="WitUS">
+  <rect width="16" height="16" rx="3" fill="#020617"/>
+  <text x="7" y="12" text-anchor="middle" font-family="'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="11" font-weight="800" fill="#f8fafc" letter-spacing="-0.5">W</text>
+  <circle cx="13" cy="12.5" r="1.25" fill="#94a3b8"/>
+</svg>

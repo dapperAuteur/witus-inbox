@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { SiteFooter, BRAND_VARIANT } from "@/components/SiteFooter";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,6 +17,14 @@ export const metadata: Metadata = {
   title: "WitUS Inbox",
   description: "Cross-ecosystem form-submission triage surface.",
   robots: { index: false, follow: false },
+  icons: {
+    icon: [
+      { url: `/brand/${BRAND_VARIANT}/favicon.svg`, type: "image/svg+xml" },
+      { url: `/brand/${BRAND_VARIANT}/favicon-32.png`, sizes: "32x32", type: "image/png" },
+      { url: `/brand/${BRAND_VARIANT}/favicon-16.png`, sizes: "16x16", type: "image/png" },
+    ],
+    apple: `/brand/${BRAND_VARIANT}/favicon-180.png`,
+  },
 };
 
 export default function RootLayout({
@@ -36,6 +45,7 @@ export default function RootLayout({
           Skip to content
         </a>
         {children}
+        <SiteFooter />
       </body>
     </html>
   );
