@@ -4,6 +4,8 @@ The site **brandanthonymcdonald.com** (BAM's personal portfolio) lives in `/User
 
 This mistake has been made more than once. If you're about to write a file under `projects/bam-portfolio/` or refer to it as the BAM portfolio repo, stop and re-read this note.
 
+For ecosystem branding (favicons, logos, ecosystem footer with Rise Wellness), see https://raw.githubusercontent.com/dapperAuteur/witus-online/main/public/brand/README.md and the footer recipe at https://raw.githubusercontent.com/dapperAuteur/witus-online/main/public/brand/footer-recipe.md. The witus repo is the canonical home — update there first when ecosystem branding changes, then absorb into this repo on next touch.
+
 ---
 
 ## Operator-task rule: capture user actions in `./plans/user-tasks/`
