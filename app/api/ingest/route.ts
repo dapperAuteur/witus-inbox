@@ -1,8 +1,9 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { submissions } from "@/db/schema";
-import { verifySignature } from "@/lib/hmac";
+import { getEnv } from "@/lib/env";
+import { signPayload, verifySignature } from "@/lib/hmac";
 import { getSourceSecret } from "@/lib/ingest-sources";
 import { sendSms } from "@/lib/sms";
 
@@ -104,6 +105,48 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (!result.ok) {
       console.error("[sms] failed detail=%s", result.detail);
     }
+  }
+
+  // Fire-and-forget: hand the full submission to the WitUS Triage Agent. The
+  // agent owns its own DB, so it needs the whole payload, not just an id.
+  // Skipped silently when either env var is unset (e.g. local dev). Runs via
+  // after() so a slow/failed triage call never delays or fails this response.
+  const triageUrl = getEnv().TRIAGE_START_URL;
+  const triageSecret = getEnv().TRIAGE_INGEST_SECRET;
+
+  if (triageUrl && triageSecret) {
+    after(async () => {
+      try {
+        const body = JSON.stringify({
+          submissionId,
+          source,
+          formType: parsed.data.form_type,
+          submitterEmail: parsed.data.submitter_email ?? null,
+          submitterName: parsed.data.submitter_name ?? null,
+          payload: parsed.data.payload,
+          priority: parsed.data.priority,
+          receivedAt: new Date().toISOString(),
+        });
+        const { timestamp, signature } = signPayload(triageSecret, body);
+        const res = await fetch(triageUrl, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-triage-timestamp": timestamp,
+            "x-triage-signature": `sha256=${signature}`,
+          },
+          body,
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          console.error("[triage] start webhook rejected status=%d", res.status);
+        }
+      } catch (err) {
+        // Error code only — never surface the URL or payload.
+        const code = err instanceof Error ? err.name : "UnknownError";
+        console.error("[triage] start webhook failed err=%s", code);
+      }
+    });
   }
 
   return NextResponse.json({ ok: true, id: submissionId }, { status: 200 });
