@@ -32,6 +32,13 @@ const EnvSchema = z.object({
   INGEST_SOURCES: z.string().optional(),
   MOBILE_TEXT_ALERTS_API_KEY: z.string().optional(),
   MOBILE_TEXT_ALERTS_RECIPIENTS: z.string().optional(),
+  // WitUS Triage Agent auto-trigger. Both optional: when either is unset the
+  // ingest route skips the triage webhook silently (e.g. local dev).
+  // TRIAGE_START_URL must be the agent's full /api/triage/start endpoint URL.
+  // Kept as a plain string (not .url()) so a malformed value can't throw here
+  // and break every route — the ingest route guards it at fetch time.
+  TRIAGE_START_URL: z.string().optional(),
+  TRIAGE_INGEST_SECRET: z.string().optional(),
 });
 
 type Env = z.infer<typeof EnvSchema>;
