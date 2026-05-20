@@ -9,6 +9,9 @@ export const dynamic = "force-dynamic";
 const VALID_STATUSES = ["new", "in_progress", "replied", "waiting", "closed"] as const;
 type Status = (typeof VALID_STATUSES)[number];
 
+const VALID_PRIORITIES = ["normal", "high"] as const;
+type Priority = (typeof VALID_PRIORITIES)[number];
+
 const MAX_ROWS = 10000;
 const MAX_Q_LENGTH = 100;
 
@@ -54,6 +57,9 @@ export async function GET(request: NextRequest): Promise<Response> {
   const url = new URL(request.url);
   const sourceFilters = dedupeNonEmpty(url.searchParams.getAll("source"));
   const formTypeFilters = dedupeNonEmpty(url.searchParams.getAll("form_type"));
+  const priorityFilters = dedupeNonEmpty(url.searchParams.getAll("priority")).filter(
+    (p): p is Priority => VALID_PRIORITIES.includes(p as Priority)
+  );
   const statusRaw = url.searchParams.get("status");
   const statusFilter: Status | undefined = VALID_STATUSES.find((s) => s === statusRaw);
   const q = url.searchParams.get("q")?.trim().slice(0, MAX_Q_LENGTH) || "";
@@ -64,6 +70,9 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
   if (formTypeFilters.length > 0) {
     conditions.push(inArray(submissions.formType, formTypeFilters));
+  }
+  if (priorityFilters.length > 0) {
+    conditions.push(inArray(submissions.priority, priorityFilters));
   }
   if (statusFilter) {
     conditions.push(eq(submissions.status, statusFilter));
@@ -78,9 +87,10 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   console.log(
-    "[inbox/export] requested sources=%d form_types=%d status=%s q_len=%d",
+    "[inbox/export] requested sources=%d form_types=%d priorities=%d status=%s q_len=%d",
     sourceFilters.length,
     formTypeFilters.length,
+    priorityFilters.length,
     statusFilter ?? "-",
     q.length
   );
