@@ -44,3 +44,14 @@ function loadSources(): Map<string, string> {
 export function getSourceSecret(slug: string): string | null {
   return loadSources().get(slug) ?? null;
 }
+
+/**
+ * Returns every slug currently configured in `INGEST_SOURCES`, sorted.
+ * Used by the inbox UI to surface ecosystem apps in the source filter even
+ * before they have submitted anything — so a newly-added sibling appears
+ * the moment its secret is provisioned, not the moment its first webhook
+ * lands.
+ */
+export function listConfiguredSourceSlugs(): string[] {
+  return Array.from(loadSources().keys()).sort();
+}

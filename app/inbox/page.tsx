@@ -2,12 +2,15 @@ import Link from "next/link";
 import { and, asc, desc, eq, ilike, inArray, or, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
 import { submissions } from "@/db/schema";
+import { listConfiguredSourceSlugs } from "@/lib/ingest-sources";
 import { StatusBadge, type SubmissionStatus } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
 
 const VALID_STATUSES: SubmissionStatus[] = ["new", "in_progress", "replied", "waiting", "closed"];
+const VALID_PRIORITIES = ["normal", "high"] as const;
+type SubmissionPriority = (typeof VALID_PRIORITIES)[number];
 const MAX_Q_LENGTH = 100;
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -39,13 +42,16 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
   const sp = await searchParams;
   const sourceFilters = takeMany(sp.source);
   const formTypeFilters = takeMany(sp.form_type);
+  const priorityFilters = takeMany(sp.priority).filter((p): p is SubmissionPriority =>
+    VALID_PRIORITIES.includes(p as SubmissionPriority)
+  );
   const statusRaw = takeOne(sp.status);
   const statusFilter = VALID_STATUSES.find((s) => s === statusRaw);
   const q = takeOne(sp.q)?.trim().slice(0, MAX_Q_LENGTH) || "";
 
   const db = getDb();
 
-  let sourceOptions: string[] = [];
+  let observedSources: string[] = [];
   let formTypeOptions: string[] = [];
   try {
     const [sourceRows, formTypeRows] = await Promise.all([
@@ -58,12 +64,20 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
         .from(submissions)
         .orderBy(asc(submissions.formType)),
     ]);
-    sourceOptions = sourceRows.map((r) => r.source);
+    observedSources = sourceRows.map((r) => r.source);
     formTypeOptions = formTypeRows.map((r) => r.formType);
   } catch (err) {
     const code = err instanceof Error ? err.name : "UnknownError";
     console.error("[inbox] facet query failed err=%s", code);
   }
+
+  // Union the configured ecosystem allowlist with whatever the DB has actually
+  // seen, so newly-added siblings appear in the filter before their first
+  // submission lands. Sorted alphabetically.
+  const sourceOptions = Array.from(
+    new Set([...listConfiguredSourceSlugs(), ...observedSources])
+  ).sort();
+  const observedSourceSet = new Set(observedSources);
 
   const validSources = new Set(sourceOptions);
   const validFormTypes = new Set(formTypeOptions);
@@ -76,6 +90,9 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
   }
   if (selectedFormTypes.length > 0) {
     conditions.push(inArray(submissions.formType, selectedFormTypes));
+  }
+  if (priorityFilters.length > 0) {
+    conditions.push(inArray(submissions.priority, priorityFilters));
   }
   if (statusFilter) {
     conditions.push(eq(submissions.status, statusFilter));
@@ -92,6 +109,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
   const exportQuery = new URLSearchParams();
   for (const s of selectedSources) exportQuery.append("source", s);
   for (const t of selectedFormTypes) exportQuery.append("form_type", t);
+  for (const p of priorityFilters) exportQuery.append("priority", p);
   if (statusFilter) exportQuery.set("status", statusFilter);
   if (q) exportQuery.set("q", q);
   const exportHref = `/api/inbox/export${exportQuery.toString() ? `?${exportQuery.toString()}` : ""}`;
@@ -144,14 +162,22 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
           name="source"
           options={sourceOptions}
           selected={selectedSources}
-          emptyHint="No sources yet."
+          quietSet={new Set(sourceOptions.filter((s) => !observedSourceSet.has(s)))}
+          emptyHint="No sources configured yet."
         />
         <PillGroup
           legend="Form type"
           name="form_type"
           options={formTypeOptions}
           selected={selectedFormTypes}
-          emptyHint="No form types yet."
+          emptyHint="No form types yet — pills appear after the first submission of each type."
+        />
+        <PillGroup
+          legend="Priority"
+          name="priority"
+          options={[...VALID_PRIORITIES]}
+          selected={priorityFilters}
+          emptyHint=""
         />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_12rem]">
           <label className="space-y-1">
@@ -247,14 +273,17 @@ function PillGroup({
   options,
   selected,
   emptyHint,
+  quietSet,
 }: {
   legend: string;
   name: string;
   options: string[];
   selected: string[];
   emptyHint: string;
+  quietSet?: Set<string>;
 }) {
   const selectedSet = new Set(selected);
+  const hasQuiet = quietSet && Array.from(quietSet).some((s) => options.includes(s));
   return (
     <fieldset>
       <legend className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -266,25 +295,36 @@ function PillGroup({
       {options.length === 0 ? (
         <p className="text-xs text-slate-400">{emptyHint}</p>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {options.map((opt) => {
-            const isChecked = selectedSet.has(opt);
-            return (
-              <label key={opt} className="cursor-pointer">
-                <input
-                  type="checkbox"
-                  name={name}
-                  value={opt}
-                  defaultChecked={isChecked}
-                  className="peer sr-only"
-                />
-                <span className="inline-flex min-h-9 items-center rounded-full border border-slate-300 bg-white px-3 py-1.5 font-mono text-xs text-slate-700 transition-colors hover:bg-slate-50 peer-checked:border-sky-600 peer-checked:bg-sky-600 peer-checked:text-white peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-sky-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:peer-checked:bg-sky-600 dark:peer-checked:text-white">
-                  {opt}
-                </span>
-              </label>
-            );
-          })}
-        </div>
+        <>
+          <div className="flex flex-wrap gap-2">
+            {options.map((opt) => {
+              const isChecked = selectedSet.has(opt);
+              const isQuiet = quietSet?.has(opt) ?? false;
+              const baseClass =
+                "inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 font-mono text-xs transition-colors peer-checked:border-sky-600 peer-checked:bg-sky-600 peer-checked:text-white peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-sky-500 dark:peer-checked:bg-sky-600 dark:peer-checked:text-white";
+              const restingClass = isQuiet
+                ? "border-dashed border-slate-300 bg-white text-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:hover:bg-slate-800"
+                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800";
+              return (
+                <label key={opt} className="cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name={name}
+                    value={opt}
+                    defaultChecked={isChecked}
+                    className="peer sr-only"
+                  />
+                  <span className={`${baseClass} ${restingClass}`}>{opt}</span>
+                </label>
+              );
+            })}
+          </div>
+          {hasQuiet ? (
+            <p className="mt-2 text-[11px] text-slate-400">
+              Dashed pills are configured ecosystem apps with no submissions yet.
+            </p>
+          ) : null}
+        </>
       )}
     </fieldset>
   );
