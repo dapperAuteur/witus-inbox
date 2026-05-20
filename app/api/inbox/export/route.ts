@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import { and, desc, eq, type SQL } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
 import { submissions } from "@/db/schema";
 
@@ -10,6 +10,7 @@ const VALID_STATUSES = ["new", "in_progress", "replied", "waiting", "closed"] as
 type Status = (typeof VALID_STATUSES)[number];
 
 const MAX_ROWS = 10000;
+const MAX_Q_LENGTH = 100;
 
 const CSV_HEADER = [
   "id",
@@ -33,23 +34,55 @@ function isoDate(now: Date): string {
   return now.toISOString().slice(0, 10);
 }
 
+function dedupeNonEmpty(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of values) {
+    const trimmed = v.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out;
+}
+
+function escapeLike(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/[%_]/g, "\\$&");
+}
+
 export async function GET(request: NextRequest): Promise<Response> {
   const url = new URL(request.url);
-  const sourceFilter = url.searchParams.get("source")?.trim() || undefined;
-  const formTypeFilter = url.searchParams.get("form_type")?.trim() || undefined;
+  const sourceFilters = dedupeNonEmpty(url.searchParams.getAll("source"));
+  const formTypeFilters = dedupeNonEmpty(url.searchParams.getAll("form_type"));
   const statusRaw = url.searchParams.get("status");
   const statusFilter: Status | undefined = VALID_STATUSES.find((s) => s === statusRaw);
+  const q = url.searchParams.get("q")?.trim().slice(0, MAX_Q_LENGTH) || "";
 
   const conditions: SQL[] = [];
-  if (sourceFilter) conditions.push(eq(submissions.source, sourceFilter));
-  if (formTypeFilter) conditions.push(eq(submissions.formType, formTypeFilter));
-  if (statusFilter) conditions.push(eq(submissions.status, statusFilter));
+  if (sourceFilters.length > 0) {
+    conditions.push(inArray(submissions.source, sourceFilters));
+  }
+  if (formTypeFilters.length > 0) {
+    conditions.push(inArray(submissions.formType, formTypeFilters));
+  }
+  if (statusFilter) {
+    conditions.push(eq(submissions.status, statusFilter));
+  }
+  if (q) {
+    const pattern = `%${escapeLike(q)}%`;
+    const fuzzy = or(
+      ilike(submissions.submitterName, pattern),
+      ilike(submissions.submitterEmail, pattern)
+    );
+    if (fuzzy) conditions.push(fuzzy);
+  }
 
   console.log(
-    "[inbox/export] requested source=%s form_type=%s status=%s",
-    sourceFilter ?? "-",
-    formTypeFilter ?? "-",
-    statusFilter ?? "-"
+    "[inbox/export] requested sources=%d form_types=%d status=%s q_len=%d",
+    sourceFilters.length,
+    formTypeFilters.length,
+    statusFilter ?? "-",
+    q.length
   );
 
   let rows: Array<{
@@ -104,7 +137,8 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
   const body = lines.join("\n") + "\n";
 
-  const slugForName = sourceFilter ?? "all";
+  const slugForName =
+    sourceFilters.length === 1 ? sourceFilters[0] : sourceFilters.length > 1 ? "multi" : "all";
   const filename = `inbox-${slugForName}-${isoDate(new Date())}.csv`;
 
   return new Response(body, {
