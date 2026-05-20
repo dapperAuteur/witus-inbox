@@ -19,12 +19,20 @@ function takeOne(value: string | string[] | undefined): string | undefined {
 export default async function InboxPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
   const sourceFilter = takeOne(sp.source)?.trim() || undefined;
+  const formTypeFilter = takeOne(sp.form_type)?.trim() || undefined;
   const statusRaw = takeOne(sp.status);
   const statusFilter = VALID_STATUSES.find((s) => s === statusRaw);
 
   const conditions: SQL[] = [];
   if (sourceFilter) conditions.push(eq(submissions.source, sourceFilter));
+  if (formTypeFilter) conditions.push(eq(submissions.formType, formTypeFilter));
   if (statusFilter) conditions.push(eq(submissions.status, statusFilter));
+
+  const exportQuery = new URLSearchParams();
+  if (sourceFilter) exportQuery.set("source", sourceFilter);
+  if (formTypeFilter) exportQuery.set("form_type", formTypeFilter);
+  if (statusFilter) exportQuery.set("status", statusFilter);
+  const exportHref = `/api/inbox/export${exportQuery.toString() ? `?${exportQuery.toString()}` : ""}`;
 
   let rows: Array<{
     id: string;
@@ -68,7 +76,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
         </span>
       </header>
 
-      <form method="get" className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_12rem_auto]">
+      <form method="get" className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_12rem_auto]">
         <label className="space-y-1">
           <span className="block text-xs font-medium uppercase tracking-wide text-slate-500">Source</span>
           <input
@@ -76,6 +84,16 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
             name="source"
             defaultValue={sourceFilter ?? ""}
             placeholder="e.g. witus-online"
+            className="block w-full min-h-11 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="block text-xs font-medium uppercase tracking-wide text-slate-500">Form type</span>
+          <input
+            type="text"
+            name="form_type"
+            defaultValue={formTypeFilter ?? ""}
+            placeholder="e.g. waitlist-signup"
             className="block w-full min-h-11 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
           />
         </label>
@@ -92,13 +110,19 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
             ))}
           </select>
         </label>
-        <div className="flex items-end">
+        <div className="flex items-end gap-2">
           <button
             type="submit"
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 sm:w-auto"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 sm:flex-none"
           >
             Filter
           </button>
+          <a
+            href={exportHref}
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800 sm:flex-none"
+          >
+            Export CSV
+          </a>
         </div>
       </form>
 
