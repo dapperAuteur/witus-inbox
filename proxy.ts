@@ -13,5 +13,5 @@ export default withAuth({
 });
 
 export const config = {
-  matcher: ["/inbox/:path*", "/api/submissions/:path*"],
+  matcher: ["/inbox/:path*", "/api/submissions/:path*", "/api/inbox/:path*"],
 };
