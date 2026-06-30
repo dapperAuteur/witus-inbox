@@ -77,6 +77,21 @@ export default function SignInPage() {
             {pending ? "Sending link…" : "Email me a sign-in link"}
           </Button>
         </form>
+
+        <p className="text-center text-xs uppercase tracking-wide text-slate-500">or</p>
+
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full"
+          onClick={() => {
+            const callbackUrl =
+              new URLSearchParams(window.location.search).get("callbackUrl") ?? "/inbox";
+            void signIn("witus", { callbackUrl });
+          }}
+        >
+          Sign in with WitUS
+        </Button>
       </div>
     </main>
   );
