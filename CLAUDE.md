@@ -1,3 +1,9 @@
+## ⚠️ Ecosystem repo identity (don't confuse these)
+
+This repo — **witus-inbox** — is **WitUS Inbox** (https://inbox.witus.online): the operator inbox that receives signed webhook form-submissions from every WitUS app (pilot signups, educator feedback, partner inquiries). Full ecosystem identity + product index: `gemini/witus/CLAUDE.md` and `gemini/witus/lib/products.ts`.
+
+---
+
 ## Ecosystem branding
 
 For ecosystem branding (favicons, logos, ecosystem footer with Rise Wellness), see https://raw.githubusercontent.com/dapperAuteur/witus-online/main/public/brand/README.md and the footer recipe at https://raw.githubusercontent.com/dapperAuteur/witus-online/main/public/brand/footer-recipe.md. The witus repo is the canonical home — update there first when ecosystem branding changes, then absorb into this repo on next touch.
