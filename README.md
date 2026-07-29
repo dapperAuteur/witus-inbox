@@ -50,6 +50,7 @@ If you have one product and one form, this is overkill. Use Formspree.
 - **NextAuth v4** + EmailProvider via Mailgun SMTP (single-admin gate)
 - **Mailgun HTTP API** for outbound replies
 - **Mobile Text Alerts** for SMS on `priority=high` submissions (optional; falls back to dev-log when unset)
+- **Better Stack** error monitoring via the `@sentry/nextjs` SDK (optional; inert until a DSN is set)
 
 Every external dependency has a no-op / dev-log fallback, so you can run the receiver without any third-party credentials.
 
@@ -109,6 +110,14 @@ A working sender library lives at [`examples/sender.ts`](./examples/sender.ts). 
 `/inbox` lists submissions newest-first with source / form-type / status filters. `/inbox/[id]` opens a detail view: humanized payload, a status select (`new` → `in_progress` → `replied` → `waiting` → `closed`), and a reply composer that sends via Mailgun and threads outbound replies into a history list.
 
 **Inbound reply threading** is wired. Each outbound reply is sent with a per-submission Reply-To address (`inbox+<submission-id>@<MAILGUN_DOMAIN>`); when the submitter replies, Mailgun's inbound route forwards the email to `/api/inbound-email`, which verifies the webhook signature and appends the message to the submission's history. Replied / closed submissions resurface to `in_progress` so they re-enter the triage queue. The Mailgun inbound route is a one-time operator setup; see [`docs/deploy-vercel-neon.md`](./docs/deploy-vercel-neon.md).
+
+## Error monitoring
+
+Crash reporting is wired through the `@sentry/nextjs` SDK, pointed at **Better Stack** (Better Stack ingests the Sentry protocol, so the DSN is whatever Better Stack issues for the source). It is **off until a DSN exists**: with `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` unset, `Sentry.init()` never runs, no network call is made, and the build behaves exactly as before. Tracing and session replay are hard-coded to a 0 sample rate: this app displays other people's submissions, so replaying an operator's screen is not something to ship offsite.
+
+Because every request here carries a signature over someone else's data, a `beforeSend` scrubber in [`lib/sentry-scrub.ts`](./lib/sentry-scrub.ts) runs before anything leaves the process. It deletes the request body outright, drops any header whose name looks like a signature / secret / token / key / auth / cookie, removes user email + IP + username, and redacts token-bearing URLs, emails, JWTs, long hex digests (an HMAC signature or an `openssl rand -hex 32` secret) and labelled secrets from every remaining string. [`lib/sentry-scrub.test.ts`](./lib/sentry-scrub.test.ts) asserts the *serialized* event carries none of them.
+
+Env vars are documented in [`.env.example`](./.env.example) under "Error monitoring". Source-map upload happens at build time only when `SENTRY_ORG`, `SENTRY_PROJECT`, and `SENTRY_AUTH_TOKEN` are all present; without them the build succeeds and stack traces are just minified.
 
 ## Contributing
 
