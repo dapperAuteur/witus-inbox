@@ -8,6 +8,7 @@ Track E open-source launch prep. Final cut of v0.1.0 happens at the launch tag.
 
 ### Added
 
+- `GET /api/health`: public, unauthenticated uptime-monitor endpoint. Runs a real `select 1` against Neon with a 4-second budget; 200 `{"ok":true,...}` when healthy, 503 `{"ok":false,"error":"database_unreachable"}` otherwise. Never echoes the caught error (a connection failure carries the password) and returns no submission data. Always `no-store`.
 - Issue templates (bug, feature, contract-change), PR template, GitHub Actions CI.
 - Unit tests for `lib/hmac.ts` and `lib/mailgun-webhook.ts` via vitest.
 - Public roadmap at [`docs/roadmap.md`](./docs/roadmap.md).

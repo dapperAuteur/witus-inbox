@@ -111,6 +111,23 @@ A working sender library lives at [`examples/sender.ts`](./examples/sender.ts). 
 
 **Inbound reply threading** is wired. Each outbound reply is sent with a per-submission Reply-To address (`inbox+<submission-id>@<MAILGUN_DOMAIN>`); when the submitter replies, Mailgun's inbound route forwards the email to `/api/inbound-email`, which verifies the webhook signature and appends the message to the submission's history. Replied / closed submissions resurface to `in_progress` so they re-enter the triage queue. The Mailgun inbound route is a one-time operator setup; see [`docs/deploy-vercel-neon.md`](./docs/deploy-vercel-neon.md).
 
+## Health check
+
+`GET /api/health` is the endpoint to point an uptime monitor at (Better Stack, or anything else). Point the monitor here rather than at the homepage: the homepage can answer 200 from cache while the database is down, so a green check there proves nothing.
+
+The route runs a real `select 1` against Neon on every request, with a 4-second budget so a hung database fails fast instead of stalling the monitor.
+
+- Healthy → **200** `{"ok":true,"service":"witus-inbox","checkedAt":"<ISO timestamp>"}`
+- Database unreachable, erroring, or slower than 4s → **503** `{"ok":false,"error":"database_unreachable"}`
+
+It is public and unauthenticated on purpose: no ingest HMAC signature, no admin session, and it is outside the [`proxy.ts`](./proxy.ts) matcher. So it is built to leak nothing.
+
+- The 503 body is a **fixed token**. The caught error is never echoed, because a connection failure routinely carries the connection string, which carries the password. Only the error's class name reaches the server log.
+- It returns **no submission data of any kind**: no counts, no latest-item info, nothing implying volume or content. This app holds other apps' names, emails, and free text.
+- It is never cached: `dynamic = "force-dynamic"` plus `Cache-Control: no-store`.
+
+[`__tests__/health.test.ts`](./__tests__/health.test.ts) asserts the healthy shape, the no-store header, the 503 token, and that a credential-bearing error string cannot reach the response body.
+
 ## Error monitoring
 
 Crash reporting is wired through the `@sentry/nextjs` SDK, pointed at **Better Stack** (Better Stack ingests the Sentry protocol, so the DSN is whatever Better Stack issues for the source). It is **off until a DSN exists**: with `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` unset, `Sentry.init()` never runs, no network call is made, and the build behaves exactly as before. Tracing and session replay are hard-coded to a 0 sample rate: this app displays other people's submissions, so replaying an operator's screen is not something to ship offsite.
