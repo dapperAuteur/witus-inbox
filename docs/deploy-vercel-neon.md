@@ -142,7 +142,7 @@ Watch the build log. Common first-time failures:
 2. Vercel shows the CNAME / A record value. Add it at your DNS provider.
 3. Wait for DNS propagation (a few minutes typically).
 4. Update `NEXTAUTH_URL` in Production to `https://inbox.your-domain.example` if you didn't already.
-5. **DKIM/SPF for Mailgun.** In your DNS provider, add the records Mailgun showed you when you set up `mg.your-domain.example` — typically one TXT for SPF (`v=spf1 include:mailgun.org ~all`) and one TXT for DKIM. If these aren't in place, magic-link emails will land in Spam (or be silently dropped) by Gmail/Outlook.
+5. **DKIM/SPF for Mailgun.** In your DNS provider, add the records Mailgun showed you when you set up `mg.your-domain.example`: typically one TXT for SPF (`v=spf1 include:mailgun.org ~all`) and one TXT for DKIM. If these aren't in place, magic-link emails will land in Spam (or be silently dropped) by Gmail/Outlook.
 6. **MX records for inbound** (only if you want submitter-reply threading). Add Mailgun's two MX records to `mg.your-domain.example` (`10 mxa.mailgun.org`, `10 mxb.mailgun.org`). Without these, Mailgun cannot accept inbound mail for your subdomain and Step 7b's route will never fire.
 
 ---

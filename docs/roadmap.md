@@ -6,7 +6,7 @@ If a feature you want isn't listed and isn't in the "out of scope" section, it's
 
 ---
 
-## v0.1.0 — shipped (launch tag, 2026-06-15)
+## v0.1.0: shipped (launch tag, 2026-06-15)
 
 The single-operator triage layer with inbound reply threading. See [`CHANGELOG.md`](../CHANGELOG.md) for the full feature inventory at launch.
 
@@ -14,7 +14,7 @@ The contract surface is **stable from this version forward**. Breaking changes g
 
 ---
 
-## v1 — planned
+## v1: planned
 
 Quality-of-life improvements that fit the single-operator scope. No timeline. Each item ships as its own PR; the v1 tag drops when enough has accumulated to be worth a release.
 
@@ -44,7 +44,7 @@ Adds the header documented in [`docs/webhook-contract.md`](./webhook-contract.md
 
 ---
 
-## v2 — likely, not committed
+## v2: likely, not committed
 
 Bigger architectural moves. The v2 tag may not happen for a year or longer.
 

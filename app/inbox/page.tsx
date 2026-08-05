@@ -170,7 +170,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
           name="form_type"
           options={formTypeOptions}
           selected={selectedFormTypes}
-          emptyHint="No form types yet — pills appear after the first submission of each type."
+          emptyHint="No form types yet. Pills appear after the first submission of each type."
         />
         <PillGroup
           legend="Priority"
