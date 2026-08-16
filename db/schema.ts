@@ -48,6 +48,12 @@ export const submissions = pgTable("submission", {
     .notNull()
     .defaultNow(),
   threadId: text("thread_id"),
+  // W3C trace context captured from the sending app's request (format-validated in the ingest
+  // route). Lets the async hop to the triage agent continue the same distributed trace instead of
+  // starting a fresh one. Trace ID + span ID + flags only — never request bodies or other headers.
+  // NULL for pre-existing rows and for senders that don't propagate a trace.
+  traceparent: text("traceparent"),
+  tracestate: text("tracestate"),
 });
 
 export const replies = pgTable("reply", {
