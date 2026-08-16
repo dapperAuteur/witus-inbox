@@ -161,7 +161,7 @@ export function SiteFooter() {
                   Rise Wellness
                   <span className="sr-only"> (wellness partner, opens in new tab)</span>
                 </a>
-                <p className="text-xs text-slate-400 leading-tight dark:text-slate-500">
+                <p className="text-xs text-slate-500 leading-tight dark:text-slate-400">
                   Wellness partner
                 </p>
               </li>
