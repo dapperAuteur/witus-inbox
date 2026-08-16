@@ -22,6 +22,30 @@ function reject(status: number): NextResponse {
   return NextResponse.json({ ok: false }, { status });
 }
 
+// W3C trace context (https://www.w3.org/TR/trace-context/): version-traceid-spanid-flags.
+// An all-zero trace or span id is invalid per spec, but a simple shape check is enough here —
+// a malformed value just means we store nothing, same as a sender that sent no header.
+const TRACEPARENT_RE = /^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/;
+
+/**
+ * Capture ONLY the W3C trace-context headers from the incoming request, never headers wholesale.
+ * traceparent is trace id + span id + flags (not PII); tracestate is vendor key=value pairs,
+ * capped at the spec's 512-char limit and only kept alongside a valid traceparent.
+ * Persisted with the submission so the async hop to the triage agent can continue the trace.
+ */
+function extractTraceContext(request: NextRequest): {
+  traceparent: string | null;
+  tracestate: string | null;
+} {
+  const traceparent = request.headers.get("traceparent");
+  if (!traceparent || !TRACEPARENT_RE.test(traceparent)) {
+    return { traceparent: null, tracestate: null };
+  }
+  const rawState = request.headers.get("tracestate");
+  const tracestate = rawState && rawState.length <= 512 ? rawState : null;
+  return { traceparent, tracestate };
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const source = request.headers.get("x-witus-source");
   const timestamp = request.headers.get("x-witus-timestamp");
@@ -62,6 +86,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return reject(400);
   }
 
+  // Trace context from the sending app, persisted with the row and forwarded on the triage hop.
+  const trace = extractTraceContext(request);
+
   const db = getDb();
   let submissionId: string | undefined;
   try {
@@ -75,6 +102,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         payload: parsed.data.payload,
         priority: parsed.data.priority,
         receivedVia: "webhook",
+        traceparent: trace.traceparent,
+        tracestate: trace.tracestate,
       })
       .returning({ id: submissions.id });
     submissionId = inserted[0]?.id;
@@ -126,6 +155,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           payload: parsed.data.payload,
           priority: parsed.data.priority,
           receivedAt: new Date().toISOString(),
+          // Additive: the sending app's W3C trace context (null when the sender didn't propagate
+          // one). The agent uses this to continue the distributed trace across the async hop.
+          traceparent: trace.traceparent,
+          tracestate: trace.tracestate,
         });
         const { timestamp, signature } = signPayload(triageSecret, body);
         const res = await fetch(triageUrl, {
