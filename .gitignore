@@ -56,3 +56,9 @@ AGENTS.md
 # Playwright
 test-results/
 playwright-report/
+
+# Tutorial pipeline (docs/tutorials committed; intermediates + sessions are not)
+tutorial-output/
+docs/tutorials/video/
+audio/
+.auth/

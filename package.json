@@ -14,7 +14,10 @@
     "db:studio": "drizzle-kit studio",
     "smoke:bam-landing-page": "tsx scripts/smoke-test-bam-landing-page.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "tutorial:record": "playwright test --config playwright.tutorial.config.ts",
+    "tutorial:docs": "node scripts/tutorial-video/gen-docs.mjs",
+    "tutorial:video": "node scripts/tutorial-video/compose.mjs"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.2",
