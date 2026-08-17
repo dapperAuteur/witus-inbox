@@ -30,22 +30,28 @@ import { defineTutorial } from "./tutorial";
 // =========================================================================================
 //
 // SELECTOR NOTE: /inbox list rows render submitterName ?? submitterEmail (the payload subject
-// is NOT shown in the list), so "[TUTORIAL]" must appear in the submitter name or email of the
-// row created by the feedback-user tutorial. The failure message below covers the mismatch case.
+// is NOT shown in the list), so the "[TUTORIAL]" subject marker from the feedback-user tutorial
+// is invisible here. Row matching therefore uses TUTORIAL_SUBMITTER — set it to the test
+// account's name or email (whatever the row displays) when recording:
+//   TUTORIAL_SUBMITTER="tools@..." TUTORIAL_STORAGE_STATE=.auth/admin.json npm run tutorial:record
+// It falls back to "[TUTORIAL]" text for the case where the submitter name itself carries the
+// marker. Either way the matched row is the ONLY row this tutorial will open (safety rule 2).
 
 const SEND_REPLY = process.env.TUTORIAL_SEND_REPLY === "1";
+const SUBMITTER_MARKER = process.env.TUTORIAL_SUBMITTER ?? "[TUTORIAL]";
 
 const REPLY_TEXT =
   "Thanks for the report — I can reproduce it and a fix is on the way. I'll follow up here when it ships.";
 
 const NO_TUTORIAL_ROW_MSG =
-  "No inbox row containing \"[TUTORIAL]\" was found. Run the FlashLearn feedback-user tutorial " +
-  "first (it submits the [TUTORIAL] bug this recording triages), then re-run this spec. " +
+  `No inbox row matching "${SUBMITTER_MARKER}" was found. Run the FlashLearn feedback-user ` +
+  "tutorial first (it submits the tutorial conversation this recording triages), and set " +
+  "TUTORIAL_SUBMITTER to the test account's displayed name/email. " +
   "This spec never opens real submitters' submissions.";
 
-// The [TUTORIAL] row — the only row this tutorial is allowed to open (safety rule 2).
+// The tutorial row — the only row this tutorial is allowed to open (safety rule 2).
 const tutorialRow = (page: import("@playwright/test").Page) =>
-  page.getByRole("link").filter({ hasText: "[TUTORIAL]" }).first();
+  page.getByRole("link").filter({ hasText: SUBMITTER_MARKER }).first();
 
 defineTutorial(
   {
