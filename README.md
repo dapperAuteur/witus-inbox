@@ -136,6 +136,69 @@ Because every request here carries a signature over someone else's data, a `befo
 
 Env vars are documented in [`.env.example`](./.env.example) under "Error monitoring". Source-map upload happens at build time only when `SENTRY_ORG`, `SENTRY_PROJECT`, and `SENTRY_AUTH_TOKEN` are all present; without them the build succeeds and stack traces are just minified.
 
+## Distributed tracing
+
+Traces go to **Honeycomb** over OTLP via `@vercel/otel` ([`otel.config.ts`](./otel.config.ts),
+registered from [`instrumentation.ts`](./instrumentation.ts) **before** the Sentry configs load —
+whoever registers the global tracer provider first wins, and Sentry is told to stand down via
+`skipOpenTelemetrySetup` in `sentry.server.config.ts`). Service name is `witus-inbox`.
+
+- **Inert until the key is set**: `HONEYCOMB_INGEST_API_KEY_SECRET` (fallback `HONEYCOMB_API_KEY`).
+  Same inert-until-provisioned pattern as the Sentry DSN — with neither var set, registration is
+  skipped entirely.
+- **`/api/health` spans are dropped at the sampler** — uptime monitors probe it around the clock,
+  and those requests must not spend Honeycomb's free-tier event budget. Everything else is recorded
+  unsampled.
+- **This app is the middle of the cross-app trace.** `@vercel/otel` honors incoming W3C
+  `traceparent` headers, so a span started by a sending app (bam-landing-page, shop-witus, …)
+  continues here as the same trace. `/api/ingest` additionally **persists the sender's
+  `traceparent` + `tracestate` with the submission** (columns in [`db/schema.ts`](./db/schema.ts))
+  and **forwards them in the triage-agent start webhook**, so the *async* hop — submission now,
+  triage run later — continues the same distributed trace. One waterfall from a form submit on the
+  sending site to the triage agent's LLM calls.
+
+## E2E + accessibility CI
+
+Playwright specs live in [`e2e/`](./e2e/); the gate runs in
+[`.github/workflows/e2e.yml`](./.github/workflows/e2e.yml) on `deployment_status` — it tests the
+**real Vercel deployment URL** (preview → full suite, production → `@smoke` only), so CI needs no
+secrets, database, or env. The suite runs desktop plus a 360px mobile project, and every covered
+page must pass an axe check with **zero serious or critical WCAG A/AA violations** — the gate is
+strict on purpose; fix the page, not the gate.
+
+- Local runs: `PLAYWRIGHT_BASE_URL=<url> npx playwright test` (drives installed Chrome via
+  `channel: "chrome"`; Playwright's bundled chromium doesn't support macOS 13).
+- If the Vercel project enables Deployment Protection, set the project's "Protection Bypass for
+  Automation" secret as the `VERCEL_AUTOMATION_BYPASS_SECRET` Actions secret; public previews need
+  nothing.
+- **Synthetic traffic is tagged, not hidden**: every request the suite makes carries
+  `x-witus-origin-test: playwright-synthetic`, which the OTel layer surfaces as the
+  `witus.origin_test` span attribute — Honeycomb queries (and logs/analytics) can include or
+  exclude test traffic. Absent header = attribute absent = real user.
+
+## Tutorial pipeline
+
+Tutorials are **recorded as Playwright specs** in [`e2e/tutorials/`](./e2e/tutorials/)
+(`*.tutorial.ts`, harness contract in [`e2e/tutorials/tutorial.ts`](./e2e/tutorials/tutorial.ts)) —
+a tutorial that no longer passes is a tutorial that no longer matches the product. Three npm
+scripts drive it:
+
+| Script | Does |
+|---|---|
+| `npm run tutorial:record` | Runs the tutorial specs under `playwright.tutorial.config.ts` (one worker, slowMo, 1280×720, video on) |
+| `npm run tutorial:docs` | Generates step-by-step markdown docs from the recorded steps |
+| `npm run tutorial:video` | Composes the narrated video from the recording |
+
+- `TUTORIAL_STORAGE_STATE` points at a signed-in Playwright storage state (this repo's `/inbox`
+  surfaces are gated to `ADMIN_EMAIL`, so it must be the admin session; `.auth/` is gitignored —
+  never commit a session). Auth-requiring tutorials *skip* (not fail) without it.
+- `TUTORIAL_SUBMITTER` names the test account so row-matching targets the tutorial's own
+  submission; `TUTORIAL_SEND_REPLY=1` gates the one mutating click (actually sending a reply).
+- Recording sessions carry the same `x-witus-origin-test: playwright-synthetic` tag as the CI
+  suite (tag, not a drop: traces still flow).
+- Generated docs are committed under `docs/tutorials/`; recorded videos and intermediates
+  (`tutorial-output/`, `docs/tutorials/video/`) are gitignored.
+
 ## Contributing
 
 Read [`CONTRIBUTING.md`](./CONTRIBUTING.md) before opening a PR. The webhook contract is stable on purpose; PRs that change it need a design issue first.
