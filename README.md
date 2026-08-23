@@ -136,6 +136,10 @@ Because every request here carries a signature over someone else's data, a `befo
 
 Env vars are documented in [`.env.example`](./.env.example) under "Error monitoring". Source-map upload happens at build time only when `SENTRY_ORG`, `SENTRY_PROJECT`, and `SENTRY_AUTH_TOKEN` are all present; without them the build succeeds and stack traces are just minified.
 
+[`app/global-error.tsx`](./app/global-error.tsx) is the last-resort boundary for a crash in the root layout itself, which `error.tsx` cannot catch because the layout is the thing that broke. It renders its own `<html>`/`<body>` with inline styles and imports nothing but the Sentry SDK, so a broken component or an unloaded stylesheet cannot take the error page down with it.
+
+There is no Content-Security-Policy in this repo (no `headers()` in `next.config.ts`, no CSP in `proxy.ts`, no `<meta http-equiv>`), so no `connect-src` has to name the ingest origin. If a CSP is ever added it must list the DSN's origin, or the browser silently drops every client-side report and the dashboard just looks quiet.
+
 ## Distributed tracing
 
 Traces go to **Honeycomb** over OTLP via `@vercel/otel` ([`otel.config.ts`](./otel.config.ts),
