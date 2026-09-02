@@ -111,6 +111,36 @@ A working sender library lives at [`examples/sender.ts`](./examples/sender.ts). 
 
 **Inbound reply threading** is wired. Each outbound reply is sent with a per-submission Reply-To address (`inbox+<submission-id>@<MAILGUN_DOMAIN>`); when the submitter replies, Mailgun's inbound route forwards the email to `/api/inbound-email`, which verifies the webhook signature and appends the message to the submission's history. Replied / closed submissions resurface to `in_progress` so they re-enter the triage queue. The Mailgun inbound route is a one-time operator setup; see [`docs/deploy-vercel-neon.md`](./docs/deploy-vercel-neon.md).
 
+## Sign in with WitUS (ecosystem SSO)
+
+Alongside the magic-link form, `/auth/sign-in` offers **Sign in with WitUS** — the shared ecosystem IdP (`accounts.witus.online`) as a NextAuth OIDC provider. The admin gate is unchanged: whichever provider is used, `lib/auth.ts` still rejects any email that is not `ADMIN_EMAIL`.
+
+**"Continue as &lt;name&gt;" is deliberately OFF on this app.** `WITUS_SHOW_CONTINUE_AS = false` in [`lib/env.ts`](./lib/env.ts). Inbox is admin-gated, `/auth/sign-in` is publicly reachable, and the app cannot know who the browser is until the OIDC flow has already run. The probe answers *"there is a WitUS session, and it belongs to Jane"* — it **cannot** answer *"Jane may sign in here"*, and it must never be asked to, because that answer crosses an origin boundary and gating access on it would be a security bug. So the honest option is not "probe and filter", it is **don't probe**: a personalized invitation to a door that gets slammed is worse than a plain door. Everyone sees the ordinary "Sign in with WitUS" button, and a non-admin who clicks it is routed to `/auth/waitlist` (below) instead of a raw NextAuth error page. **This is an opt-out, not a deletion** — the probe, its helpers, and their tests stay in place as the shared ecosystem implementation for the open apps, which pass `showContinueAs` (default `true`).
+
+For reference, the mechanism those apps get: the sign-in form renders immediately and *in parallel* the page asks `<idp-origin>/api/ecosystem/session` (derived from `WITUS_OIDC_DISCOVERY_URL`, never hardcoded a second time) who this browser is; if an answer arrives within 4s the button relabels. The IdP cookie is third-party there, so Safari ITP and Firefox Total Cookie Protection answer nothing — a failed, blocked, or timed-out probe is completely invisible. **The name is display copy, never a credential**: clicking still runs the real OIDC code flow. A one-shot marker (`sessionStorage` `witus.sso.attempted`, plus a `?sso=tried` query param) is written *before* the redirect so a stale IdP session cannot produce a sign-in loop.
+
+One behaviour **does** sit on top of the provider here, and it stays completely dark unless `WITUS_OIDC_CLIENT_ID` is set — the button does not render, nothing is requested from the IdP, and sign-out stays local:
+
+- **Global sign-out** — the sign-out control in the `/inbox` header reads "Sign out of WitUS" when ecosystem SSO is configured, and signing out ends the shared session at the IdP too. The local NextAuth session is destroyed **first**, then the browser is handed off to the IdP's `end_session_endpoint`; if the IdP is unreachable or refuses, you are still signed out here. `post_logout_redirect_uri` is this app's origin **with a trailing slash** — that exact string must be registered for this client in the IdP registry (`gemini/witus` `lib/identity/clients.ts`) or the IdP returns `invalid_request`.
+
+Env vars: `WITUS_OIDC_CLIENT_ID`, `WITUS_OIDC_CLIENT_SECRET`, optional `WITUS_OIDC_DISCOVERY_URL` (see [`.env.example`](./.env.example)). Design notes live in [`lib/silent-sso.ts`](./lib/silent-sso.ts); [`lib/silent-sso.test.ts`](./lib/silent-sso.test.ts) pins the gate, the sign-out ordering, the loop guard, the invisible-failure rule, and the admin-gated opt-out.
+
+### A refused sign-in goes to `/auth/waitlist`, not a wall
+
+`lib/auth.ts` sets `pages.error = "/auth/sign-in"`, so a failed sign-in comes back to this app instead of NextAuth's raw `/api/auth/error` page — which offers no message, no link back, and no route to anything.
+
+`pages.error` is **one URL for every code that reaches it**, so the sign-in page reads `?error=` and branches ([`lib/auth-error.ts`](./lib/auth-error.ts)):
+
+| `?error=` | What happens |
+| --- | --- |
+| `AccessDenied` — the admin gate refused this account | redirect to `/auth/waitlist?from=sso`: "That account doesn't have access here… want to be added to the list?" |
+| `Verification` — an expired or already-used magic link | inline notice, "we'll send a fresh one", email form untouched |
+| `Configuration`, `EmailSignin`, `OAuth*`, `SessionRequired`, anything unknown | inline notice saying what happened, with the email form still available |
+
+That branching is **mandatory, not a nicety**: in the installed next-auth v4 (`core/index.js`, `case "error"`), both `AccessDenied` and `Verification` land on `pages.error`. Routing the whole page to the waitlist would tell an admin whose link merely expired that they have no access. [`lib/auth-error.test.ts`](./lib/auth-error.test.ts) pins the mapping.
+
+**The waitlist records something real, and it is not a second mechanism.** This app has no waitlist table — what it has is the submissions pipeline it exists to serve. `POST /api/waitlist` writes a row into the `submission` table (`source: witus-inbox`, `form_type: waitlist-signup`, `received_via: manual`) that shows up in the normal `/inbox` triage queue with the normal status/reply tooling. It is idempotent on the address, so a repeat submission is not another row. It does **not** go through `/api/ingest` — that is the HMAC door for *other* origins, and this app would be signing a payload to itself; and it deliberately does not fire the triage-agent webhook, because an access request wants a human. The page asks for the address because NextAuth hands an error page a *code*, never the address that was refused.
+
 ## Health check
 
 `GET /api/health` is the endpoint to point an uptime monitor at (Better Stack, or anything else). Point the monitor here rather than at the homepage: the homepage can answer 200 from cache while the database is down, so a green check there proves nothing.

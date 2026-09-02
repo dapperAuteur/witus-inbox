@@ -4,7 +4,9 @@ import { getDb } from "@/db";
 import { submissions } from "@/db/schema";
 import { listConfiguredSourceSlugs } from "@/lib/ingest-sources";
 import { StatusBadge, type SubmissionStatus } from "@/components/StatusBadge";
+import { SignOutButton } from "@/components/SignOutButton";
 import { Badge } from "@/components/ui/badge";
+import { getWitusEndSessionUrl } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -151,9 +153,14 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
     <main id="main" className="mx-auto w-full max-w-4xl px-4 py-6 sm:py-10">
       <header className="mb-6 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">Inbox</h1>
-        <span className="text-xs text-slate-500 dark:text-slate-400">
-          {rows.length} {rows.length === 1 ? "row" : "rows"}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            {rows.length} {rows.length === 1 ? "row" : "rows"}
+          </span>
+          {/* Resolved on the server: null unless WITUS_OIDC_CLIENT_ID is set, in
+              which case signing out here also ends the shared WitUS session. */}
+          <SignOutButton endSessionUrl={getWitusEndSessionUrl()} />
+        </div>
       </header>
 
       <form method="get" className="mb-6 space-y-4 rounded-md border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">

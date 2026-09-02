@@ -1,37 +1,49 @@
-"use client";
+import { redirect } from "next/navigation";
+import { SignInForm } from "@/components/SignInForm";
+import { WitusSsoButton } from "@/components/WitusSsoButton";
+import { authErrorAction, errorCodeFromSearchParams } from "@/lib/auth-error";
+import {
+  WITUS_SHOW_CONTINUE_AS,
+  getWitusSilentSsoEndpoint,
+  isWitusOidcConfigured,
+} from "@/lib/env";
 
-import { useState, type FormEvent } from "react";
-import { signIn } from "next-auth/react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+// Server component so the ecosystem-SSO endpoints are resolved here, from env,
+// and handed down as props — a client component must never read the raw env.
+// force-dynamic because that resolution has to happen per request rather than
+// being frozen into a prerendered page at build time.
+//
+// THIS PAGE IS ALSO THE FAILURE SURFACE. lib/auth.ts sets
+// `pages.error = "/auth/sign-in"`, so every NextAuth sign-in failure comes back
+// here with an `?error=` code instead of landing on the raw /api/auth/error page
+// (no message, no link back — a wall). ONE url receives every code that reaches
+// it, so the code has to be read and branched on: AccessDenied (the admin gate
+// refused this WitUS account) is sent on to /auth/waitlist, while Verification (an
+// expired magic link) gets a "send a fresh one" notice and the email flow stays
+// intact. The mapping lives in lib/auth-error.ts, pinned by lib/auth-error.test.ts.
+//
+// THE "Continue as <name>" PROBE IS OFF HERE, deliberately — see
+// WITUS_SHOW_CONTINUE_AS in lib/env.ts for why an admin-gated app must not offer a
+// personalized label it may refuse thirty seconds later.
+export const dynamic = "force-dynamic";
 
-export default function SignInPage() {
-  const [email, setEmail] = useState("");
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const action = authErrorAction(errorCodeFromSearchParams(await searchParams));
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setPending(true);
-    const callbackUrl =
-      new URLSearchParams(window.location.search).get("callbackUrl") ?? "/inbox";
-    const result = await signIn("email", {
-      email,
-      callbackUrl,
-      redirect: false,
-    });
-    if (result?.error) {
-      setPending(false);
-      setError("Could not start sign-in. Check the email address and try again.");
-      return;
-    }
-    if (result?.url) {
-      window.location.href = result.url;
-      return;
-    }
-    window.location.href = "/auth/verify-request";
-  }
+  // A refused non-admin never sees this page — they are routed to the waitlist and
+  // asked whether they want to join (BAM, 2026-09-01).
+  if (action?.kind === "redirect") redirect(action.to);
+
+  // Both null/false unless WITUS_OIDC_CLIENT_ID is set. With no OIDC client the
+  // `witus` provider is not registered in lib/auth.ts, so the button would land
+  // on a NextAuth error page; it stays dark instead, and no request is made to
+  // accounts.witus.online at all.
+  const witusEnabled = isWitusOidcConfigured();
+  const silentCheckUrl = getWitusSilentSsoEndpoint();
 
   return (
     <main id="main" className="flex flex-1 items-center justify-center px-4 py-10">
@@ -43,55 +55,31 @@ export default function SignInPage() {
           </p>
         </header>
 
-        <form onSubmit={onSubmit} noValidate className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="email" className="block text-sm font-medium">
-              Email
-            </label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              inputMode="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={pending}
-              aria-describedby={error ? "sign-in-error" : undefined}
-              aria-invalid={error ? true : undefined}
+        {action?.kind === "notice" ? (
+          <section
+            role="alert"
+            className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-700 dark:bg-amber-950"
+          >
+            <p className="font-semibold text-slate-900 dark:text-slate-100">{action.title}</p>
+            <p className="mt-1 text-slate-700 dark:text-slate-300">{action.body}</p>
+          </section>
+        ) : null}
+
+        <SignInForm />
+
+        {witusEnabled ? (
+          <>
+            <p className="text-center text-xs uppercase tracking-wide text-slate-500">or</p>
+            <WitusSsoButton
+              enabled={witusEnabled}
+              silentCheckUrl={silentCheckUrl}
+              // OFF on this admin-gated app. Not a deletion — see
+              // WITUS_SHOW_CONTINUE_AS. With `false` the component makes no
+              // request to the IdP at all and the button keeps its plain label.
+              showContinueAs={WITUS_SHOW_CONTINUE_AS}
             />
-          </div>
-
-          {error ? (
-            <p
-              id="sign-in-error"
-              role="alert"
-              className="text-sm text-red-600 dark:text-red-400"
-            >
-              {error}
-            </p>
-          ) : null}
-
-          <Button type="submit" disabled={pending || email.length === 0} className="w-full">
-            {pending ? "Sending link…" : "Email me a sign-in link"}
-          </Button>
-        </form>
-
-        <p className="text-center text-xs uppercase tracking-wide text-slate-500">or</p>
-
-        <Button
-          type="button"
-          variant="secondary"
-          className="w-full"
-          onClick={() => {
-            const callbackUrl =
-              new URLSearchParams(window.location.search).get("callbackUrl") ?? "/inbox";
-            void signIn("witus", { callbackUrl });
-          }}
-        >
-          Sign in with WitUS
-        </Button>
+          </>
+        ) : null}
       </div>
     </main>
   );
