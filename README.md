@@ -111,6 +111,17 @@ A working sender library lives at [`examples/sender.ts`](./examples/sender.ts). 
 
 **Inbound reply threading** is wired. Each outbound reply is sent with a per-submission Reply-To address (`inbox+<submission-id>@<MAILGUN_DOMAIN>`); when the submitter replies, Mailgun's inbound route forwards the email to `/api/inbound-email`, which verifies the webhook signature and appends the message to the submission's history. Replied / closed submissions resurface to `in_progress` so they re-enter the triage queue. The Mailgun inbound route is a one-time operator setup; see [`docs/deploy-vercel-neon.md`](./docs/deploy-vercel-neon.md).
 
+## Sign in with WitUS (ecosystem SSO)
+
+Alongside the magic-link form, `/auth/sign-in` offers **Sign in with WitUS** — the shared ecosystem IdP (`accounts.witus.online`) as a NextAuth OIDC provider. The admin gate is unchanged: whichever provider is used, `lib/auth.ts` still rejects any email that is not `ADMIN_EMAIL`.
+
+Two behaviours sit on top of it, and **both stay completely dark unless `WITUS_OIDC_CLIENT_ID` is set** — the button does not render, nothing is requested from the IdP, and sign-out stays local:
+
+- **"Continue as &lt;name&gt;"** — the sign-in form renders immediately, and *in parallel* the page asks `<idp-origin>/api/ecosystem/session` (derived from `WITUS_OIDC_DISCOVERY_URL`, never hardcoded a second time) who this browser is. If an answer arrives within 4s, the button relabels to "Continue as &lt;name&gt;". The IdP cookie is third-party here, so Safari ITP and Firefox Total Cookie Protection answer nothing — a failed, blocked, or timed-out probe is completely invisible and the button keeps its normal label. **The name is display copy, never a credential**: clicking still runs the real OIDC code flow. A one-shot marker (`sessionStorage` `witus.sso.attempted`, plus a `?sso=tried` query param) is written *before* the redirect so a stale IdP session cannot produce a sign-in loop.
+- **Global sign-out** — the sign-out control in the `/inbox` header reads "Sign out of WitUS" when ecosystem SSO is configured, and signing out ends the shared session at the IdP too. The local NextAuth session is destroyed **first**, then the browser is handed off to the IdP's `end_session_endpoint`; if the IdP is unreachable or refuses, you are still signed out here. `post_logout_redirect_uri` is this app's origin **with a trailing slash** — that exact string must be registered for this client in the IdP registry (`gemini/witus` `lib/identity/clients.ts`) or the IdP returns `invalid_request`.
+
+Env vars: `WITUS_OIDC_CLIENT_ID`, `WITUS_OIDC_CLIENT_SECRET`, optional `WITUS_OIDC_DISCOVERY_URL` (see [`.env.example`](./.env.example)). Design notes live in [`lib/silent-sso.ts`](./lib/silent-sso.ts); [`lib/silent-sso.test.ts`](./lib/silent-sso.test.ts) pins the gate, the sign-out ordering, the loop guard, and the invisible-failure rule.
+
 ## Health check
 
 `GET /api/health` is the endpoint to point an uptime monitor at (Better Stack, or anything else). Point the monitor here rather than at the homepage: the homepage can answer 200 from cache while the database is down, so a green check there proves nothing.

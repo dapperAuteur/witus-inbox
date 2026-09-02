@@ -5,7 +5,8 @@ import type { OAuthConfig } from "next-auth/providers/oauth";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { getDb } from "@/db";
 import { accounts, sessions, users, verificationTokens } from "@/db/schema";
-import { getEnv } from "@/lib/env";
+import { getEnv, isWitusOidcConfigured } from "@/lib/env";
+import { WITUS_OIDC_DISCOVERY_FALLBACK } from "@/lib/silent-sso";
 
 const env = getEnv();
 const adminEmail = env.ADMIN_EMAIL.toLowerCase();
@@ -20,18 +21,17 @@ interface WitusProfile {
  * "Sign in with WitUS" — the ecosystem IdP (accounts.witus.online) as a NextAuth
  * OIDC provider. Added only when WITUS_OIDC_CLIENT_ID is set, so a missing env
  * never breaks the build. Discovery URL is env-overridable
- * (WITUS_OIDC_DISCOVERY_URL); the literal is a labeled fallback, not an asserted
- * value (per the authoritative-values rule). Inbox stays admin-only — the signIn
- * callback below still requires ADMIN_EMAIL regardless of provider.
+ * (WITUS_OIDC_DISCOVERY_URL); the fallback literal lives in lib/silent-sso.ts so
+ * the IdP host is named in exactly one place, and it is a labeled fallback, not
+ * an asserted value (per the authoritative-values rule). Inbox stays admin-only
+ * — the signIn callback below still requires ADMIN_EMAIL regardless of provider.
  */
 function witusProvider(): OAuthConfig<WitusProfile> {
   return {
     id: "witus",
     name: "WitUS",
     type: "oauth",
-    wellKnown:
-      process.env.WITUS_OIDC_DISCOVERY_URL ??
-      "https://accounts.witus.online/api/idp/.well-known/openid-configuration",
+    wellKnown: process.env.WITUS_OIDC_DISCOVERY_URL ?? WITUS_OIDC_DISCOVERY_FALLBACK,
     clientId: process.env.WITUS_OIDC_CLIENT_ID,
     clientSecret: process.env.WITUS_OIDC_CLIENT_SECRET,
     authorization: { params: { scope: "openid email profile" } },
@@ -60,7 +60,7 @@ export const authOptions: NextAuthOptions = {
       server: env.EMAIL_SERVER,
       from: env.EMAIL_FROM,
     }),
-    ...(process.env.WITUS_OIDC_CLIENT_ID ? [witusProvider()] : []),
+    ...(isWitusOidcConfigured() ? [witusProvider()] : []),
   ],
   session: { strategy: "jwt" },
   secret: env.NEXTAUTH_SECRET,
