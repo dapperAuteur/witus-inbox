@@ -34,11 +34,30 @@ import {
 export function WitusSsoButton({
   enabled,
   silentCheckUrl,
+  showContinueAs = true,
 }: {
   /** Server-resolved: is the `witus` OIDC provider actually registered? */
   enabled: boolean;
   /** Server-resolved IdP probe URL, or null when ecosystem SSO is unconfigured. */
   silentCheckUrl: string | null;
+  /**
+   * MAY THIS APP OFFER "Continue as <name>"? Default `true` — this component is
+   * the shared ecosystem implementation and the open apps should keep it.
+   *
+   * WitUS Inbox passes `false` (lib/env.ts:WITUS_SHOW_CONTINUE_AS) because it is
+   * ADMIN-GATED. It cannot know whether the browser's WitUS account is allowed
+   * here until the OIDC flow has already run, and it MUST NOT try to: the probe's
+   * answer crosses an origin boundary, so it is display copy, and gating access on
+   * it would be a security bug. Given that, offering "Continue as Jane" to someone
+   * who will be refused a full round trip later is a personalized invitation to a
+   * door that gets slammed — worse than the plain door. So the app declines to ask
+   * at all; everyone sees "Sign in with WitUS".
+   *
+   * THIS IS AN OPT-OUT, NOT A DELETION. Passing `false` skips the probe entirely
+   * (no request to the IdP) while the mechanism stays here, tested, for the apps
+   * that should use it. Don't "restore" the label on an admin-gated app.
+   */
+  showContinueAs?: boolean;
 }) {
   const [pending, setPending] = useState(false);
   const [identity, setIdentity] = useState<SsoIdentity | null>(null);
@@ -49,6 +68,7 @@ export function WitusSsoButton({
       endpoint,
       search: window.location.search,
       attempted: readAttempted(),
+      showContinueAs,
     });
     // `!endpoint` is already implied by decision.attempt; repeating it keeps the
     // narrowing the compiler's rather than a cast that outlives the invariant.
@@ -89,7 +109,7 @@ export function WitusSsoButton({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [enabled, silentCheckUrl]);
+  }, [enabled, silentCheckUrl, showContinueAs]);
 
   const start = useCallback(() => {
     setPending(true);

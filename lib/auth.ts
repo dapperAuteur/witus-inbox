@@ -67,6 +67,15 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/auth/sign-in",
     verifyRequest: "/auth/verify-request",
+    // `error` is set so a failed sign-in lands on OUR page instead of NextAuth's
+    // raw /api/auth/error (no message, no link back — a wall). The sign-in page
+    // then reads the ?error= code and branches: AccessDenied (the admin gate
+    // below refusing a non-admin) redirects to /auth/waitlist, while Verification
+    // (an expired magic link) gets a "send a fresh one" notice. ONE url serves
+    // every code that reaches it — verified in the installed next-auth v4,
+    // core/index.js `case "error"` — so the branching is mandatory, not a nicety.
+    // See lib/auth-error.ts.
+    error: "/auth/sign-in",
   },
   callbacks: {
     signIn({ user }) {

@@ -121,3 +121,31 @@ export function getWitusEndSessionUrl(): string | null {
   if (!base) return null;
   return `${base}?client_id=${encodeURIComponent(clientId)}`;
 }
+
+/**
+ * SHOULD THE SIGN-IN PAGE OFFER "Continue as <name>"? NO, ON THIS APP.
+ *
+ * BAM, 2026-09-01: "if non-admin attempts to login, route them to waitlist and ask
+ * them if they want to join waitlist, dont show them the 'continue as Jane'".
+ *
+ * WitUS Inbox is ADMIN-GATED: lib/auth.ts's `signIn` callback completes a sign-in
+ * only for ADMIN_EMAIL. /auth/sign-in, however, is publicly reachable (proxy.ts
+ * matches only /inbox and the two API prefixes), and this app cannot know who the
+ * browser is until the OIDC flow has already run. The silent probe answers "there
+ * is a WitUS session, and it belongs to Jane" — it CANNOT answer "Jane may sign in
+ * here", and must never be asked to: the answer arrives across an origin boundary,
+ * so it is display copy, and gating access on it would be a security bug (see
+ * lib/silent-sso.ts).
+ *
+ * That leaves one honest option: don't ask. A personalized invitation to a door
+ * that will be slammed is worse than a plain door. Everyone still sees the ordinary
+ * "Sign in with WitUS" button; a non-admin who clicks it is now routed to
+ * /auth/waitlist instead of a raw NextAuth error page (lib/auth-error.ts).
+ *
+ * THIS IS AN OPT-OUT, NOT A DELETION. The probe, its helpers, and lib/silent-sso.test.ts
+ * stay intact — they are the shared ecosystem implementation and the open apps
+ * should keep using them. It is a plain constant rather than an env var on purpose:
+ * this is a property of what this app IS (single-admin), not of how a deployment is
+ * configured, and a deploy must not be able to switch it back on by accident.
+ */
+export const WITUS_SHOW_CONTINUE_AS = false;

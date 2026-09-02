@@ -41,3 +41,31 @@ test("verify-request page renders and is accessible", async ({ page }) => {
   await expect(page.locator("h1").first()).toBeVisible();
   await expectNoSeriousA11yViolations(page);
 });
+
+test("the waitlist page a refused sign-in lands on renders and is accessible", async ({
+  page,
+}) => {
+  // lib/auth.ts points pages.error at /auth/sign-in, which forwards ?error=AccessDenied
+  // here (lib/auth-error.ts) so a non-admin gets an explanation and an offer instead of
+  // NextAuth's raw error page. It is public by necessity: whoever reaches it has just
+  // been refused, so they have no session to authenticate with. Third public page in
+  // this app, and the third to be gated on a11y.
+  await page.goto("/auth/waitlist?from=sso");
+  await expect(
+    page.getByRole("heading", { name: /doesn't have access here/i }),
+  ).toBeVisible();
+  // The offer has to be usable, not just present — a page that only says "no" is the
+  // wall this replaced.
+  await expect(page.getByLabel(/email/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /add me to the list/i })).toBeVisible();
+  await expectNoSeriousA11yViolations(page);
+});
+
+test("the waitlist page without ?from=sso still offers to add you", async ({ page }) => {
+  // Reachable directly. `from` only chooses the wording — it is a query param a stranger
+  // can type, so it gates nothing.
+  await page.goto("/auth/waitlist");
+  await expect(page.getByRole("heading", { name: /request access/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /add me to the list/i })).toBeVisible();
+  await expectNoSeriousA11yViolations(page);
+});

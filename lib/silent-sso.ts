@@ -80,7 +80,11 @@ export interface SsoIdentity {
   label: string;
 }
 
-export type SilentSsoSkip = "not-configured" | "already-attempted" | "already-signed-in";
+export type SilentSsoSkip =
+  | "continue-as-disabled"
+  | "not-configured"
+  | "already-attempted"
+  | "already-signed-in";
 
 export type SilentSsoDecision = { attempt: true } | { attempt: false; skip: SilentSsoSkip };
 
@@ -88,15 +92,34 @@ export type SilentSsoDecision = { attempt: true } | { attempt: false; skip: Sile
  * Should this browser ask the IdP who it is?
  *
  * `endpoint` is the SERVER-RESOLVED probe URL (null when WITUS_OIDC_CLIENT_ID is
- * unset). It is checked first because it is the hard gate: no configured OIDC
- * client means no request to accounts.witus.online at all.
+ * unset). It is a hard gate: no configured OIDC client means no request to
+ * accounts.witus.online at all.
+ *
+ * WHY AN APP WOULD PASS `showContinueAs: false`. On an ADMIN-GATED app the
+ * personalized label is a promise the app cannot keep. This module CANNOT and MUST
+ * NOT tell an admin from a non-admin before the flow runs: the probe answer crosses
+ * an origin boundary, so it is client-supplied display copy, and gating access on
+ * it would be a security bug. The honest alternative is therefore not "probe and
+ * filter" — it is "do not probe". Someone offered "Continue as Jane", who clicks,
+ * spends a full OIDC round trip and is then refused, has been invited to a door
+ * that gets slammed; the plain "Sign in with WitUS" button makes the same refusal
+ * without the personal invitation. WitUS Inbox and Centenarian Coach both pass
+ * `false` (BAM, 2026-09-01). DO NOT "restore" the label on either as a missing
+ * feature — the mechanism below stays intact and shared for the open apps.
+ *
+ * The flag is checked FIRST: an opted-out app makes no request whatever else holds.
  */
 export function silentSsoDecision(input: {
   endpoint: string | null | undefined;
   search?: string | null;
   attempted?: boolean;
   signedIn?: boolean;
+  /** May this app offer "Continue as <name>"? Default true; admin-gated apps pass false. */
+  showContinueAs?: boolean;
 }): SilentSsoDecision {
+  if (input.showContinueAs === false) {
+    return { attempt: false, skip: "continue-as-disabled" };
+  }
   if (!input.endpoint) return { attempt: false, skip: "not-configured" };
   if (input.signedIn) return { attempt: false, skip: "already-signed-in" };
   if (input.attempted || hasAttemptMarker(input.search)) {
