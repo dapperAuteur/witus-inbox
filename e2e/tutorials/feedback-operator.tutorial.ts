@@ -104,7 +104,8 @@ defineTutorial(
           action: async (page) => {
             // TUTORIAL_SEND_REPLY=1: BAM has verified the submitter is his own test account.
             // This click sends a REAL email to the submission's submitter_email.
-            await page.getByLabel(/^Reply to/).fill(REPLY_TEXT);
+            // Typed, not filled: with slowMo off (see playwright.tutorial.config.ts) a fill lands in one frame.
+            await page.getByLabel(/^Reply to/).pressSequentially(REPLY_TEXT, { delay: 35 });
             await page.getByRole("button", { name: "Send reply" }).click();
             // The reply route flips the submission to "replied" (app/api/submissions/[id]/reply);
             // the header StatusBadge re-renders on router.refresh().
@@ -118,7 +119,8 @@ defineTutorial(
           action: async (page) => {
             // Default DRY RUN: type the reply and hold the frame — do NOT click "Send reply".
             // Re-record with TUTORIAL_SEND_REPLY=1 to capture the real send + status flip.
-            await page.getByLabel(/^Reply to/).fill(REPLY_TEXT);
+            // Typed, not filled: with slowMo off (see playwright.tutorial.config.ts) a fill lands in one frame.
+            await page.getByLabel(/^Reply to/).pressSequentially(REPLY_TEXT, { delay: 35 });
             await expect(page.getByRole("button", { name: "Send reply" })).toBeEnabled();
           },
         },
