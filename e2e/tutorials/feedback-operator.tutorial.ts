@@ -65,7 +65,7 @@ defineTutorial(
       // plans/31 Tutorial C step 6
       title: "One inbox for every app",
       narration:
-        "Every app in the ecosystem reports into one inbox. Your bug just arrived, marked high — which also pings my phone by text.",
+        "Every app in the ecosystem reports into one inbox. Your bug just arrived, marked high.",
       action: async (page) => {
         await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
         // Filter pills by source (the "Source" fieldset legend from app/inbox/page.tsx).
