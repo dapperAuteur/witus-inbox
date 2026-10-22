@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SiteFooter, BRAND_VARIANT } from "@/components/SiteFooter";
+import { PostHogProvider } from "@/lib/analytics/posthog-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -44,6 +45,12 @@ export default function RootLayout({
         >
           Skip to content
         </a>
+        {/* Anonymous, memory-only analytics. Inert when NEXT_PUBLIC_POSTHOG_KEY is unset. The env
+            is read here in the Server Component and passed down; `?? null` is the keyless state. */}
+        <PostHogProvider
+          apiKey={process.env.NEXT_PUBLIC_POSTHOG_KEY ?? null}
+          apiHost="/ingest"
+        />
         {children}
         <SiteFooter />
       </body>
