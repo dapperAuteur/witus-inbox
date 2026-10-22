@@ -170,6 +170,20 @@ Env vars are documented in [`.env.example`](./.env.example) under "Error monitor
 
 There is no Content-Security-Policy in this repo (no `headers()` in `next.config.ts`, no CSP in `proxy.ts`, no `<meta http-equiv>`), so no `connect-src` has to name the ingest origin. If a CSP is ever added it must list the DSN's origin, or the browser silently drops every client-side report and the dashboard just looks quiet.
 
+## Product analytics
+
+Anonymous product analytics go to the **shared WitUS PostHog project (US region)**, following the ecosystem standard in witus-online's [`lib/analytics/INTEGRATE.md`](https://github.com/dapperAuteur/witus-online/blob/main/lib/analytics/INTEGRATE.md). It is **off until a key exists**: with `NEXT_PUBLIC_POSTHOG_KEY` unset, `posthog.init()` never runs and the app renders normally.
+
+- [`lib/analytics/posthog-provider.tsx`](./lib/analytics/posthog-provider.tsx) and [`lib/analytics/capture.ts`](./lib/analytics/capture.ts) are byte-for-byte copies of the witus-online originals. Don't edit them here; the init options are the privacy posture, and changes are an ecosystem decision.
+- [`lib/analytics/events.ts`](./lib/analytics/events.ts) is this app's taxonomy. `ANALYTICS_APP = "inbox"` (this app's slug in witus `lib/identity/clients.ts`), registered on every event as the `app` property.
+- Posture: `autocapture: false`, `disable_session_recording: true`, `persistence: "memory"` (no cookie, no localStorage, so no consent banner), `capture_pageview: false` (route views are sent explicitly), and no `identify()`. Session replay is **not** enabled.
+- Ingest is proxied: the browser posts to `/ingest`, which `next.config.ts` rewrites to `https://us.i.posthog.com` (assets to `us-assets.i.posthog.com`). `skipTrailingSlashRedirect: true` is required for that and is safe here because every page is noindex. `proxy.ts` uses explicit-path matchers, so it does not catch `/ingest/*`.
+- Always send events through `capture()` from `lib/analytics/capture.ts`, never `posthog.capture()` directly.
+
+Env vars are documented in [`.env.example`](./.env.example) under "Product analytics". Set `NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com` explicitly. Because there is no CSP in this repo, nothing else is needed; if one is added, `/ingest` is same-origin, so `connect-src 'self'` covers it.
+
+Drift check (from a witus-online checkout): `node scripts/check-posthog-conformance.mjs /path/to/witus-inbox`.
+
 ## Distributed tracing
 
 Traces go to **Honeycomb** over OTLP via `@vercel/otel` ([`otel.config.ts`](./otel.config.ts),
