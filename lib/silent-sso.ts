@@ -30,11 +30,14 @@
  * thing that establishes identity — and the `signIn` callback there still
  * requires ADMIN_EMAIL regardless of what any label said.
  *
- * ── Feature 2: global sign-out ───────────────────────────────────────────────
- * BAM's decision, 2026-08-30: "signout signs out of every app". Ending only the
- * local NextAuth session leaves the IdP session alive, which — now that
- * "Continue as ..." exists — means signing out and coming back offers to sign
- * you straight back in. That reads as a broken logout.
+ * ── Feature 2: two sign-out controls ─────────────────────────────────────────
+ * BAM, 2026-10-29, witus task 128 option (b). "Sign out" ends ONLY this app's
+ * NextAuth session and goes to /auth/sign-in; it never navigates to the IdP.
+ * A second, secondary control, "Sign out of WitUS everywhere", also ends the
+ * shared accounts.witus.online session via the IdP's endsession endpoint. It
+ * renders only when this app is a configured OIDC client. (This replaces the
+ * 2026-08-30 behaviour where the one button always ended the WitUS session too
+ * while every other app kept its own session, which surprised BAM.)
  *
  * ── This app is single-host and admin-only ───────────────────────────────────
  * witus-learn's version of this file carries a per-tenant `enabled` gate because
@@ -43,8 +46,8 @@
  * permitted user (ADMIN_EMAIL, enforced in lib/auth.ts and proxy.ts), so there
  * is no white-label surface to leak to and no host gate here. The only gate is
  * WITUS_OIDC_CLIENT_ID: with no OIDC client there is nothing to continue as and
- * no shared session to end, and an affordance the visitor cannot complete is
- * worse than no affordance.
+ * no shared session to end (so no "everywhere" control), and an affordance the
+ * visitor cannot complete is worse than no affordance.
  */
 
 /**
@@ -221,4 +224,81 @@ function cleanLabel(value: unknown): string | null {
 /** Button copy. Kept here so the test pins the exact string the visitor reads. */
 export function continueAsLabel(identity: SsoIdentity | null): string {
   return identity ? `Continue as ${identity.label}` : "Sign in with WitUS";
+}
+
+// ── Sign-out (BAM, 2026-10-29, witus task 128 option (b)) ─────────────────────
+
+/** Where plain "Sign out" lands. Every page under /inbox is gated by proxy.ts. */
+export const LOCAL_SIGN_OUT_DESTINATION = "/auth/sign-in";
+
+/** Exact accessible names and help text. Pinned by lib/silent-sso.test.ts. */
+export const SIGN_OUT_LABEL = "Sign out";
+export const SIGN_OUT_EVERYWHERE_LABEL = "Sign out of WitUS everywhere";
+export const SIGN_OUT_EVERYWHERE_HELP =
+  "Also signs you out of WitUS. Other WitUS apps you are signed in to stay signed in until you sign out of them.";
+export const SIGNING_OUT_LABEL = "Signing out…";
+
+/**
+ * The full IdP logout URL for "Sign out of WitUS everywhere".
+ *
+ * `endSessionUrl` is the server-resolved `.../oauth2/endsession?client_id=...`
+ * from lib/env.ts (getWitusEndSessionUrl), so we append with `&`, not `?`.
+ *
+ * TRAILING SLASH IS REQUIRED. better-auth exact-matches
+ * post_logout_redirect_uri against the client's registered redirectUrls, and
+ * the IdP registry (gemini/witus lib/identity/clients.ts) registers
+ * `origin + "/"`. Drop the slash and the IdP returns invalid_request.
+ *
+ * NOTE: only the production origin (https://inbox.witus.online/) is registered
+ * with the IdP, so a Vercel preview deployment gets refused at the IdP. The
+ * local session is already gone by then, which is the point of the order.
+ */
+export function endSessionRedirectUrl(endSessionUrl: string, origin: string): string {
+  const back = `${origin}/`;
+  return `${endSessionUrl}&post_logout_redirect_uri=${encodeURIComponent(back)}`;
+}
+
+/** Side effects the sign-out flows need, injected so tests can observe order. */
+export type SignOutEffects = {
+  /** Ends this app's NextAuth session without navigating. */
+  endLocalSession: () => Promise<unknown>;
+  /** A full navigation (window.location.assign in the browser). */
+  navigate: (url: string) => void;
+};
+
+async function endLocalSessionQuietly(effects: SignOutEffects): Promise<void> {
+  await effects.endLocalSession().catch(() => {
+    // NextAuth already cleared the cookie in the common failure modes; the
+    // navigation that follows is what matters either way, so never trap
+    // someone in a session they asked to leave.
+  });
+}
+
+/**
+ * Plain "Sign out": ends ONLY this app's session, then goes to the local
+ * sign-in page. It NEVER navigates to the IdP, even when an end-session URL is
+ * configured; the WitUS session and every other app's session stay alive.
+ */
+export async function signOutHere(effects: SignOutEffects): Promise<void> {
+  await endLocalSessionQuietly(effects);
+  effects.navigate(LOCAL_SIGN_OUT_DESTINATION);
+}
+
+/**
+ * "Sign out of WitUS everywhere": ends this app's session, then hands the
+ * browser to the IdP's endsession endpoint, which ends the WitUS session and
+ * returns to `<origin>/`.
+ *
+ * ORDER IS THE SAFETY PROPERTY. Destroy the local session FIRST. If the IdP is
+ * unreachable, refuses the logout, or the redirect never completes, BAM is
+ * still signed out HERE. Handing off first would turn any IdP failure into "I
+ * clicked sign out and I'm still signed in".
+ */
+export async function signOutEverywhere(
+  endSessionUrl: string,
+  origin: string,
+  effects: SignOutEffects
+): Promise<void> {
+  await endLocalSessionQuietly(effects);
+  effects.navigate(endSessionRedirectUrl(endSessionUrl, origin));
 }

@@ -1,68 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import {
+  SIGN_OUT_EVERYWHERE_HELP,
+  SIGN_OUT_EVERYWHERE_LABEL,
+  SIGN_OUT_LABEL,
+  SIGNING_OUT_LABEL,
+  signOutEverywhere,
+  signOutHere,
+  type SignOutEffects,
+} from "@/lib/silent-sso";
 
 /**
- * Sign out of the Inbox — and, when ecosystem SSO is configured, out of every
- * WitUS app in this browser (BAM's decision, 2026-08-30: "signout signs out of
- * every app"). Ending only the local NextAuth session would leave the shared
- * accounts.witus.online session alive, so signing out and coming back would
- * offer to sign you straight back in via "Continue as ...", which reads as a
- * broken logout.
+ * Sign-out controls (BAM, 2026-10-29, witus task 128 option (b)).
+ *
+ * - `SignOutButton` ("Sign out") ends ONLY the Inbox's NextAuth session and goes
+ *   to /auth/sign-in. It never navigates to the IdP and its label never changes
+ *   (shared UI rule: the header Sign out control is never renamed or removed).
+ * - `SignOutEverywhereButton` ("Sign out of WitUS everywhere") is a secondary
+ *   control that also ends the shared accounts.witus.online session. It renders
+ *   only when `endSessionUrl` is non-null.
  *
  * `endSessionUrl` is resolved on the SERVER (lib/env.ts, getWitusEndSessionUrl)
  * and already carries `client_id`; it is null when this app is not a configured
- * OIDC client, in which case sign-out stays purely local. A client component
- * must not read the raw env.
+ * OIDC client. A client component must not read the raw env.
  */
-export function SignOutButton({
-  endSessionUrl = null,
-  className,
-}: {
-  endSessionUrl?: string | null;
-  className?: string;
-}) {
+
+// `redirect: false` so NextAuth does not navigate before we do. A full
+// navigation (not a router push) follows: the everywhere flow leaves this
+// origin, and every page under /inbox is gated by proxy.ts anyway.
+const browserEffects: SignOutEffects = {
+  endLocalSession: () => signOut({ redirect: false }),
+  navigate: (url) => window.location.assign(url),
+};
+
+export function SignOutButton({ className }: { className?: string }) {
   const [pending, setPending] = useState(false);
 
   async function onClick() {
     setPending(true);
-    // ORDER IS THE SAFETY PROPERTY. Destroy the local session FIRST. If the IdP
-    // is unreachable, refuses the logout, or the redirect never completes, BAM
-    // is still signed out HERE. Handing off first would turn any IdP failure
-    // into "I clicked sign out and I'm still signed in".
-    // `redirect: false` so NextAuth does not navigate before we do.
-    await signOut({ redirect: false }).catch(() => {
-      // NextAuth already cleared the cookie in the common failure modes; the
-      // navigation below is what matters either way, so never trap someone in a
-      // session they asked to leave.
-    });
-
-    if (endSessionUrl) {
-      // TRAILING SLASH IS REQUIRED. better-auth exact-matches
-      // post_logout_redirect_uri against the client's registered redirectUrls,
-      // and the IdP registry (gemini/witus lib/identity/clients.ts) registers
-      // `origin + "/"`. Drop the slash and the IdP returns invalid_request.
-      //
-      // Derived from window.location.origin rather than a hardcoded host so the
-      // one external value this app asserts stays its own origin. NOTE: only the
-      // production origin (https://inbox.witus.online/) is registered with the
-      // IdP, so a Vercel preview deployment gets refused at this step — the
-      // local session is already gone by then, which is the point of the order.
-      const back = `${window.location.origin}/`;
-      // A full navigation, not a router push: this leaves our origin.
-      // `&`, not `?`: endSessionUrl already carries client_id.
-      window.location.assign(
-        `${endSessionUrl}&post_logout_redirect_uri=${encodeURIComponent(back)}`
-      );
-      return;
-    }
-
-    // Local-only sign-out. A full navigation rather than router.refresh(): every
-    // page under /inbox is gated by proxy.ts, so re-rendering in place would
-    // just bounce through the middleware anyway.
-    window.location.assign("/auth/sign-in");
+    await signOutHere(browserEffects);
   }
 
   return (
@@ -74,7 +53,46 @@ export function SignOutButton({
       disabled={pending}
       onClick={() => void onClick()}
     >
-      {pending ? "Signing out…" : endSessionUrl ? "Sign out of WitUS" : "Sign out"}
+      {pending ? SIGNING_OUT_LABEL : SIGN_OUT_LABEL}
     </Button>
+  );
+}
+
+export function SignOutEverywhereButton({
+  endSessionUrl = null,
+  className,
+}: {
+  endSessionUrl?: string | null;
+  className?: string;
+}) {
+  const [pending, setPending] = useState(false);
+  const helpId = useId();
+
+  if (!endSessionUrl) return null;
+  const url = endSessionUrl;
+
+  async function onClick() {
+    setPending(true);
+    // ORDER IS THE SAFETY PROPERTY: signOutEverywhere destroys the local
+    // session FIRST, then hands off to the IdP (see lib/silent-sso.ts).
+    await signOutEverywhere(url, window.location.origin, browserEffects);
+  }
+
+  return (
+    <div className={className}>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        aria-describedby={helpId}
+        disabled={pending}
+        onClick={() => void onClick()}
+      >
+        {pending ? SIGNING_OUT_LABEL : SIGN_OUT_EVERYWHERE_LABEL}
+      </Button>
+      <p id={helpId} className="mt-1 max-w-xs text-xs text-slate-600 dark:text-slate-400">
+        {SIGN_OUT_EVERYWHERE_HELP}
+      </p>
+    </div>
   );
 }

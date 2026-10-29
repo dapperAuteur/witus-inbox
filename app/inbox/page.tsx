@@ -4,7 +4,7 @@ import { getDb } from "@/db";
 import { submissions } from "@/db/schema";
 import { listConfiguredSourceSlugs } from "@/lib/ingest-sources";
 import { StatusBadge, type SubmissionStatus } from "@/components/StatusBadge";
-import { SignOutButton } from "@/components/SignOutButton";
+import { SignOutButton, SignOutEverywhereButton } from "@/components/SignOutButton";
 import { SelectAllCheckbox } from "@/components/SelectAllCheckbox";
 import { Badge } from "@/components/ui/badge";
 import { getWitusEndSessionUrl } from "@/lib/env";
@@ -176,15 +176,19 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
 
   return (
     <main id="main" className="mx-auto w-full max-w-4xl px-4 py-6 sm:py-10">
-      <header className="mb-6 flex items-center justify-between gap-3">
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">{archivedView ? "Inbox: Archived" : "Inbox"}</h1>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-500 dark:text-slate-400">
-            {total} {total === 1 ? "row" : "rows"}
-          </span>
+        <div className="flex flex-col items-end gap-2 text-right">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              {total} {total === 1 ? "row" : "rows"}
+            </span>
+            {/* "Sign out" ends only this app's session (BAM, 2026-10-29, witus task 128 option (b)). */}
+            <SignOutButton />
+          </div>
           {/* Resolved on the server: null unless WITUS_OIDC_CLIENT_ID is set, in
-              which case signing out here also ends the shared WitUS session. */}
-          <SignOutButton endSessionUrl={getWitusEndSessionUrl()} />
+              which case the second control also ends the shared WitUS session. */}
+          <SignOutEverywhereButton endSessionUrl={getWitusEndSessionUrl()} />
         </div>
       </header>
 
