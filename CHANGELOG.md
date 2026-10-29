@@ -15,7 +15,7 @@ Track E open-source launch prep. Final cut of v0.1.0 happens at the launch tag.
 - Public roadmap at [`docs/roadmap.md`](./docs/roadmap.md).
 - `/inbox` list tools: paging (50 per page), five sorts, quick-filter chips with counts (kinds, one per app, High priority, Unread or new, Archived), search over form type and message text as well as name and email, a UTC date range, and the full view in the URL. CSV export follows the same view and gains an `archived_at` column (appended last).
 - Archive and unarchive, one (detail page) or many (list checkboxes), plus an Archived view. New nullable column `submission.archived_at`; nothing is deleted, and an inbound submitter reply unarchives. Works without JavaScript (plain form posts to `POST /api/submissions/archive`, which also takes JSON).
-- `.github/workflows/db-push-production.yml`: applies `db/schema.ts` to production on merge (and on demand) using the `NEON_DIRECT_URL` repository secret. Runbook: `docs/deploy-vercel-neon.md`, Schema changes.
+- `docs/deploy-vercel-neon.md`, Schema changes (production): how to apply a schema change by hand before merging it (`db:push` is deliberately not run from CI).
 
 ### Fixed
 

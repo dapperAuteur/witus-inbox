@@ -220,30 +220,22 @@ Expect `200 {"ok":true,"id":"<uuid>"}`. Then sign in at `https://inbox.your-doma
 
 ### Schema changes (production)
 
-A merge to `main` that changes `db/schema.ts` runs `.github/workflows/db-push-production.yml`, which applies the schema to the production database with `drizzle-kit push`. It can also be run by hand: GitHub, **Actions → Push schema to production database → Run workflow**. Each run writes the statements it ran (or "No changes detected") to the run summary.
+This repo has no migration files yet: `npm run db:push` (drizzle-kit push) compares `db/schema.ts` with the database and runs the difference. It is **run by hand, not from CI**, on purpose: push can drop a column that was removed from the schema without asking, so it needs a person reading the statements first. Moving to generated migrations (a baseline `0000`, then a merge-to-main workflow) is backlog item P3 in the witus repo's `plans/future/post-deploy-automation-backlog-2026-10-28.md`.
 
-It needs one repository secret, `NEON_DIRECT_URL`: the **direct (unpooled)** connection string for Inbox's production Neon branch. Set it without the value ever touching a terminal or a chat:
+**Order: push the schema first, then merge.** Keep schema changes additive (a new nullable column, a new table) so the code already on production keeps working on the new schema; then the merge's deploy finds the column waiting and nothing answers 500 in between.
 
-```bash
-neon projects list                     # find the Inbox project id
-neon connection-string --project-id <inbox project id> | gh secret set NEON_DIRECT_URL --repo dapperAuteur/witus-inbox
-```
-
-`neon connection-string` prints the direct string unless `--pooled` is passed; if your Neon CLI version differs, copy the string from the Neon console (**Connect**, pooling off) straight into GitHub's secret form instead.
-
-Keep schema changes additive (a new nullable column, a new table). Vercel deploys the same merge in parallel, so for about a minute the new code may read a column the push has not added yet. A change drizzle-kit would ask about (a rename, a drop that loses data) is asked before any statement runs, and the workflow has no one to answer it (stdin closed, 5-minute limit), so the job fails. Only additive changes have been run through it; do anything else by hand with the fallback below.
-
-**Manual fallback** (from a laptop, same effect as the workflow):
+From a checkout of the branch that changes the schema:
 
 ```bash
-vercel env pull .env.production.local --environment=production
-set -a; source .env.production.local; set +a
-npm run db:push        # prints the statements, or "No changes detected"
+# The direct (unpooled) string for Inbox's production Neon branch, never pasted into a terminal:
+export STORAGE_DATABASE_URL_UNPOOLED="$(neon connection-string --project-id <inbox project id>)"
+npm run db:push        # read the statements it prints before you confirm
+unset STORAGE_DATABASE_URL_UNPOOLED
 ```
 
-If Vercel marks the variable Sensitive, `vercel env pull` returns it empty; use the `neon connection-string` command above as `STORAGE_DATABASE_URL_UNPOOLED="$(neon connection-string --project-id <id>)" npm run db:push` instead.
+`neon projects list` shows the project id. `neon connection-string` prints the direct string unless `--pooled` is passed; if your CLI differs, take the string from the Neon console (**Connect**, pooling off). `vercel env pull .env.production.local --environment=production` works too when the variable is not marked Sensitive. Note that `drizzle.config.ts` also loads `.env.local`, but a variable already exported in the shell wins.
 
-Expected output for the 2026-10-29 change: one `ALTER TABLE "submission" ADD COLUMN "archived_at" timestamp with time zone;`. Check it read-only afterwards with `select count(*) from submission where archived_at is not null;` (0 until something is archived).
+Expected output for the 2026-10-29 change: one `ALTER TABLE "submission" ADD COLUMN "archived_at" timestamp with time zone;`. Check it read-only afterwards with `select count(*) from submission where archived_at is not null;` (0 until something is archived). Running it again prints "No changes detected".
 
 ---
 
