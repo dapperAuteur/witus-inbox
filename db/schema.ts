@@ -54,6 +54,11 @@ export const submissions = pgTable("submission", {
   // NULL for pre-existing rows and for senders that don't propagate a trace.
   traceparent: text("traceparent"),
   tracestate: text("tracestate"),
+  // Set when the operator archives the row; NULL means it is in the active list.
+  // Archiving never deletes: the row, its replies and its status are kept, and
+  // unarchiving sets this back to NULL. An inbound reply from the submitter also
+  // clears it (app/api/inbound-email), so an archived thread resurfaces.
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
 });
 
 export const replies = pgTable("reply", {

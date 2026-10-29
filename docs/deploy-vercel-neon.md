@@ -218,6 +218,33 @@ Expect `200 {"ok":true,"id":"<uuid>"}`. Then sign in at `https://inbox.your-doma
 - **Rotate `NEXTAUTH_SECRET`:** invalidates every active session in that environment. Pick a low-traffic window. Recommend every 90 days.
 - **Deal with Spam-routing of sign-in emails:** mark the first one "Not spam" on each operator account. Subsequent magic links from the same sender + recipient pair land in Inbox.
 
+### Schema changes (production)
+
+A merge to `main` that changes `db/schema.ts` runs `.github/workflows/db-push-production.yml`, which applies the schema to the production database with `drizzle-kit push`. It can also be run by hand: GitHub, **Actions → Push schema to production database → Run workflow**. Each run writes the statements it ran (or "No changes detected") to the run summary.
+
+It needs one repository secret, `NEON_DIRECT_URL`: the **direct (unpooled)** connection string for Inbox's production Neon branch. Set it without the value ever touching a terminal or a chat:
+
+```bash
+neon projects list                     # find the Inbox project id
+neon connection-string --project-id <inbox project id> | gh secret set NEON_DIRECT_URL --repo dapperAuteur/witus-inbox
+```
+
+`neon connection-string` prints the direct string unless `--pooled` is passed; if your Neon CLI version differs, copy the string from the Neon console (**Connect**, pooling off) straight into GitHub's secret form instead.
+
+Keep schema changes additive (a new nullable column, a new table). Vercel deploys the same merge in parallel, so for about a minute the new code may read a column the push has not added yet. A change drizzle-kit would ask about (a rename, a drop that loses data) is asked before any statement runs, and the workflow has no one to answer it (stdin closed, 5-minute limit), so the job fails. Only additive changes have been run through it; do anything else by hand with the fallback below.
+
+**Manual fallback** (from a laptop, same effect as the workflow):
+
+```bash
+vercel env pull .env.production.local --environment=production
+set -a; source .env.production.local; set +a
+npm run db:push        # prints the statements, or "No changes detected"
+```
+
+If Vercel marks the variable Sensitive, `vercel env pull` returns it empty; use the `neon connection-string` command above as `STORAGE_DATABASE_URL_UNPOOLED="$(neon connection-string --project-id <id>)" npm run db:push` instead.
+
+Expected output for the 2026-10-29 change: one `ALTER TABLE "submission" ADD COLUMN "archived_at" timestamp with time zone;`. Check it read-only afterwards with `select count(*) from submission where archived_at is not null;` (0 until something is archived).
+
 ---
 
 ## What this guide doesn't cover

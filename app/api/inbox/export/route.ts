@@ -1,19 +1,12 @@
 import { type NextRequest } from "next/server";
-import { and, desc, eq, ilike, inArray, or, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
 import { submissions } from "@/db/schema";
+import { orderByFor, parseInboxQuery, whereFor, type Priority, type Status } from "@/lib/inbox-query";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const VALID_STATUSES = ["new", "in_progress", "replied", "waiting", "closed"] as const;
-type Status = (typeof VALID_STATUSES)[number];
-
-const VALID_PRIORITIES = ["normal", "high"] as const;
-type Priority = (typeof VALID_PRIORITIES)[number];
-
 const MAX_ROWS = 10000;
-const MAX_Q_LENGTH = 100;
 
 const CSV_HEADER = [
   "id",
@@ -25,6 +18,8 @@ const CSV_HEADER = [
   "priority",
   "received_at",
   "payload_json",
+  // Appended last (2026-10-29) so existing column positions do not move.
+  "archived_at",
 ];
 
 function csvField(value: unknown): string {
@@ -37,62 +32,24 @@ function isoDate(now: Date): string {
   return now.toISOString().slice(0, 10);
 }
 
-function dedupeNonEmpty(values: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const v of values) {
-    const trimmed = v.trim();
-    if (!trimmed || seen.has(trimmed)) continue;
-    seen.add(trimmed);
-    out.push(trimmed);
-  }
-  return out;
-}
-
-function escapeLike(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/[%_]/g, "\\$&");
-}
-
 export async function GET(request: NextRequest): Promise<Response> {
-  const url = new URL(request.url);
-  const sourceFilters = dedupeNonEmpty(url.searchParams.getAll("source"));
-  const formTypeFilters = dedupeNonEmpty(url.searchParams.getAll("form_type"));
-  const priorityFilters = dedupeNonEmpty(url.searchParams.getAll("priority")).filter(
-    (p): p is Priority => VALID_PRIORITIES.includes(p as Priority)
-  );
-  const statusRaw = url.searchParams.get("status");
-  const statusFilter: Status | undefined = VALID_STATUSES.find((s) => s === statusRaw);
-  const q = url.searchParams.get("q")?.trim().slice(0, MAX_Q_LENGTH) || "";
-
-  const conditions: SQL[] = [];
-  if (sourceFilters.length > 0) {
-    conditions.push(inArray(submissions.source, sourceFilters));
-  }
-  if (formTypeFilters.length > 0) {
-    conditions.push(inArray(submissions.formType, formTypeFilters));
-  }
-  if (priorityFilters.length > 0) {
-    conditions.push(inArray(submissions.priority, priorityFilters));
-  }
-  if (statusFilter) {
-    conditions.push(eq(submissions.status, statusFilter));
-  }
-  if (q) {
-    const pattern = `%${escapeLike(q)}%`;
-    const fuzzy = or(
-      ilike(submissions.submitterName, pattern),
-      ilike(submissions.submitterEmail, pattern)
-    );
-    if (fuzzy) conditions.push(fuzzy);
-  }
+  // The same parser and WHERE as the /inbox page, so the CSV is exactly the
+  // current view (archived or active, chips, search, dates, sort), every page.
+  const query = parseInboxQuery(new URL(request.url).searchParams);
+  const sourceFilters = query.sources;
 
   console.log(
-    "[inbox/export] requested sources=%d form_types=%d priorities=%d status=%s q_len=%d",
-    sourceFilters.length,
-    formTypeFilters.length,
-    priorityFilters.length,
-    statusFilter ?? "-",
-    q.length
+    "[inbox/export] requested view=%s kinds=%d sources=%d form_types=%d priorities=%d status=%s q_len=%d from=%s to=%s sort=%s",
+    query.view,
+    query.kinds.length,
+    query.sources.length,
+    query.formTypes.length,
+    query.priorities.length,
+    query.status ?? "-",
+    query.q.length,
+    query.from ?? "-",
+    query.to ?? "-",
+    query.sort,
   );
 
   let rows: Array<{
@@ -102,12 +59,13 @@ export async function GET(request: NextRequest): Promise<Response> {
     submitterName: string | null;
     submitterEmail: string | null;
     status: Status;
-    priority: "normal" | "high";
+    priority: Priority;
     receivedAt: Date;
     payload: unknown;
+    archivedAt: Date | null;
   }>;
   try {
-    const query = getDb()
+    rows = await getDb()
       .select({
         id: submissions.id,
         source: submissions.source,
@@ -118,11 +76,12 @@ export async function GET(request: NextRequest): Promise<Response> {
         priority: submissions.priority,
         receivedAt: submissions.receivedAt,
         payload: submissions.payload,
+        archivedAt: submissions.archivedAt,
       })
       .from(submissions)
-      .orderBy(desc(submissions.receivedAt))
+      .where(whereFor(query))
+      .orderBy(...orderByFor(query.sort))
       .limit(MAX_ROWS);
-    rows = conditions.length > 0 ? await query.where(and(...conditions)) : await query;
   } catch (err) {
     const code = err instanceof Error ? err.name : "UnknownError";
     console.error("[inbox/export] query failed err=%s", code);
@@ -142,6 +101,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         csvField(row.priority),
         csvField(row.receivedAt.toISOString()),
         csvField(JSON.stringify(row.payload ?? null)),
+        csvField(row.archivedAt ? row.archivedAt.toISOString() : null),
       ].join(",")
     );
   }

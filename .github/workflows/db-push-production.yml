@@ -1,0 +1,79 @@
+# Apply db/schema.ts to the production database after a merge to main, so the owner never pastes a
+# connection string (ecosystem post-deploy automation rule, shared rules v9).
+#
+# This repo has no migration files: the schema is applied with `drizzle-kit push`, which compares
+# db/schema.ts with the live database and runs the difference. So the workflow runs when a push to main
+# changes db/schema.ts (or the drizzle config), and on demand (Actions -> "Push schema to production
+# database" -> Run workflow).
+#
+# Secret: NEON_DIRECT_URL, the Neon DIRECT (unpooled) connection string for Inbox's production branch.
+# Set it once without copying the value (docs/deploy-vercel-neon.md, "Recurring operations"):
+#   neon connection-string --project-id <inbox project id> | gh secret set NEON_DIRECT_URL --repo dapperAuteur/witus-inbox
+# GitHub masks it in every log line. The job fails closed when it is missing.
+#
+# Safe to run twice: when the database already matches, push changes nothing. A change drizzle-kit
+# would have to ask about (a rename, or a drop that loses data) asks before it runs any statement; here
+# stdin is closed and the step has a 5-minute limit, so it cannot be answered in CI and the job fails.
+# Only additive changes were in mind when this was written (2026-10-29); do anything else by hand.
+#
+# Timing: Vercel deploys the same push in parallel. Keep schema changes additive (a new nullable column)
+# so the old code keeps working on the new schema; the new code's pages that read the new column answer
+# an error only until this job finishes, about a minute.
+name: Push schema to production database
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "db/schema.ts"
+      - "drizzle.config.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-push-production
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require NEON_DIRECT_URL
+        env:
+          NEON_DIRECT_URL: ${{ secrets.NEON_DIRECT_URL }}
+        run: |
+          if [ -z "$NEON_DIRECT_URL" ]; then
+            echo "::error::Set the repository secret NEON_DIRECT_URL (see docs/deploy-vercel-neon.md, Recurring operations: schema changes)."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Push schema
+        env:
+          # drizzle.config.ts prefers the unpooled URL for schema work.
+          STORAGE_DATABASE_URL_UNPOOLED: ${{ secrets.NEON_DIRECT_URL }}
+        run: |
+          set -o pipefail
+          timeout 300 npx drizzle-kit push --verbose < /dev/null 2>&1 | tee push.log
+          {
+            echo "### Schema push to production"
+            echo
+            echo "Commit: \`${GITHUB_SHA}\`"
+            echo
+            echo '```'
+            # The statements drizzle-kit ran (or "No changes detected"). No connection string is printed.
+            grep -v -i "postgres://\|postgresql://" push.log | tail -n 60
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
