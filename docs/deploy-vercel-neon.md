@@ -218,6 +218,25 @@ Expect `200 {"ok":true,"id":"<uuid>"}`. Then sign in at `https://inbox.your-doma
 - **Rotate `NEXTAUTH_SECRET`:** invalidates every active session in that environment. Pick a low-traffic window. Recommend every 90 days.
 - **Deal with Spam-routing of sign-in emails:** mark the first one "Not spam" on each operator account. Subsequent magic links from the same sender + recipient pair land in Inbox.
 
+### Schema changes (production)
+
+This repo has no migration files yet: `npm run db:push` (drizzle-kit push) compares `db/schema.ts` with the database and runs the difference. It is **run by hand, not from CI**, on purpose: push can drop a column that was removed from the schema without asking, so it needs a person reading the statements first. Moving to generated migrations (a baseline `0000`, then a merge-to-main workflow) is backlog item P3 in the witus repo's `plans/future/post-deploy-automation-backlog-2026-10-28.md`.
+
+**Order: push the schema first, then merge.** Keep schema changes additive (a new nullable column, a new table) so the code already on production keeps working on the new schema; then the merge's deploy finds the column waiting and nothing answers 500 in between.
+
+From a checkout of the branch that changes the schema:
+
+```bash
+# The direct (unpooled) string for Inbox's production Neon branch, never pasted into a terminal:
+export STORAGE_DATABASE_URL_UNPOOLED="$(neon connection-string --project-id <inbox project id>)"
+npm run db:push        # read the statements it prints before you confirm
+unset STORAGE_DATABASE_URL_UNPOOLED
+```
+
+`neon projects list` shows the project id. `neon connection-string` prints the direct string unless `--pooled` is passed; if your CLI differs, take the string from the Neon console (**Connect**, pooling off). `vercel env pull .env.production.local --environment=production` works too when the variable is not marked Sensitive. Note that `drizzle.config.ts` also loads `.env.local`, but a variable already exported in the shell wins.
+
+Expected output for the 2026-10-29 change: one `ALTER TABLE "submission" ADD COLUMN "archived_at" timestamp with time zone;`. Check it read-only afterwards with `select count(*) from submission where archived_at is not null;` (0 until something is archived). Running it again prints "No changes detected".
+
 ---
 
 ## What this guide doesn't cover

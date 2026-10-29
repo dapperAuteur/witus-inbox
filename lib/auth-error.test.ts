@@ -91,6 +91,7 @@ describe("the magic-link flow does not regress into a waitlist pitch", () => {
       "EmailSignin",
       "CredentialsSignin",
       "SessionRequired",
+      "WitusEmailUnverified",
       "SomethingNextAuthAddsLater",
     ];
     for (const code of codes) {

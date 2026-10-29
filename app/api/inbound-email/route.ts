@@ -84,10 +84,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const db = getDb();
-  let exists: { id: string; source: string; status: typeof submissions.$inferSelect.status } | undefined;
+  let exists:
+    | {
+        id: string;
+        source: string;
+        status: typeof submissions.$inferSelect.status;
+        archivedAt: Date | null;
+      }
+    | undefined;
   try {
     const rows = await db
-      .select({ id: submissions.id, source: submissions.source, status: submissions.status })
+      .select({
+        id: submissions.id,
+        source: submissions.source,
+        status: submissions.status,
+        archivedAt: submissions.archivedAt,
+      })
       .from(submissions)
       .where(eq(submissions.id, submissionId))
       .limit(1);
@@ -117,11 +129,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Resurface the row in the triage queue: a fresh submitter reply
     // should pull a "replied" or "closed" submission back to the
     // operator's attention. Leave "in_progress" / "waiting" / "new" alone.
-    if (exists.status === "replied" || exists.status === "closed") {
-      await db
-        .update(submissions)
-        .set({ status: "in_progress" })
-        .where(eq(submissions.id, exists.id));
+    // An archived submission comes back to the active list for the same reason.
+    const resurface: { status?: "in_progress"; archivedAt?: null } = {};
+    if (exists.status === "replied" || exists.status === "closed") resurface.status = "in_progress";
+    if (exists.archivedAt) resurface.archivedAt = null;
+    if (Object.keys(resurface).length > 0) {
+      await db.update(submissions).set(resurface).where(eq(submissions.id, exists.id));
     }
     console.log(
       "[inbound-email] received source=%s submission_id=%s reply_id=%s",

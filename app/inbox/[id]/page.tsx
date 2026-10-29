@@ -8,6 +8,7 @@ import { ReplyComposer } from "@/components/ReplyComposer";
 import { StatusBadge, type SubmissionStatus } from "@/components/StatusBadge";
 import { StatusControl } from "@/components/StatusControl";
 import { Badge } from "@/components/ui/badge";
+import { archiveNotice } from "@/lib/archive";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +16,14 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function SubmissionDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const notice = archiveNotice(sp.done, sp.n);
   if (!UUID.test(id)) notFound();
 
   const db = getDb();
@@ -34,6 +39,7 @@ export default async function SubmissionDetailPage({
         status: SubmissionStatus;
         priority: "normal" | "high";
         receivedAt: Date;
+        archivedAt: Date | null;
       }
     | undefined;
 
@@ -49,6 +55,7 @@ export default async function SubmissionDetailPage({
         status: submissions.status,
         priority: submissions.priority,
         receivedAt: submissions.receivedAt,
+        archivedAt: submissions.archivedAt,
       })
       .from(submissions)
       .where(eq(submissions.id, id))
@@ -91,17 +98,24 @@ export default async function SubmissionDetailPage({
     <main id="main" className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:py-10">
       <nav className="text-sm">
         <Link
-          href="/inbox"
+          href={submission.archivedAt ? "/inbox?view=archived" : "/inbox"}
           className="text-sky-600 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:text-sky-400"
         >
-          ← Back to inbox
+          ← Back to {submission.archivedAt ? "Archived" : "inbox"}
         </Link>
       </nav>
+
+      {notice ? (
+        <p role="status" className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-100">
+          {submission.archivedAt ? "Archived. It stays here, with its history, under Archived." : "Back in the inbox."}
+        </p>
+      ) : null}
 
       <header className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={submission.status} />
           {submission.priority === "high" ? <Badge tone="red">High</Badge> : null}
+          {submission.archivedAt ? <Badge tone="muted">Archived</Badge> : null}
           <span className="font-mono text-xs text-slate-500">{submission.source}</span>
           <span className="text-xs text-slate-400">·</span>
           <span className="font-mono text-xs text-slate-500">{submission.formType}</span>
@@ -127,6 +141,25 @@ export default async function SubmissionDetailPage({
 
       <section aria-label="Status" className="rounded-md border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <StatusControl submissionId={submission.id} current={submission.status} />
+        {/* A plain form post: archiving keeps the row, its status and its history.
+            app/api/submissions/archive answers with a 303 back to this page. */}
+        <form method="post" action="/api/submissions/archive" className="mt-4 flex flex-wrap items-center gap-3">
+          <input type="hidden" name="id" value={submission.id} />
+          <input type="hidden" name="return" value={`/inbox/${submission.id}`} />
+          <button
+            type="submit"
+            name="action"
+            value={submission.archivedAt ? "unarchive" : "archive"}
+            className="inline-flex min-h-11 items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+          >
+            {submission.archivedAt ? "Unarchive" : "Archive"}
+          </button>
+          {submission.archivedAt ? (
+            <span className="text-xs text-slate-500">
+              Archived {submission.archivedAt.toLocaleString()}
+            </span>
+          ) : null}
+        </form>
       </section>
 
       <section aria-label="Reply" className="rounded-md border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
