@@ -93,12 +93,26 @@ export function authErrorAction(
         body: "The round trip to WitUS was interrupted. Try again, or use the email form above.",
       };
 
-    // Same address, two providers, and the WitUS account was never linked to it.
+    // Same address, two providers, and NextAuth refused to link them. Since
+    // 2026-10-29 the WitUS provider links to an existing same-email user when the
+    // IdP asserts a verified email (lib/sso-linking.ts), so this now means the WitUS
+    // identity is already linked to a DIFFERENT user row here. Rare; the email form
+    // still works.
     case "OAuthAccountNotLinked":
       return {
         kind: "notice",
         title: "That account is not linked",
-        body: "This email already signed in here a different way. Use the email form above instead.",
+        body: "This WitUS account is linked to a different sign-in here. Use the email form above instead.",
+      };
+
+    // Not a NextAuth code: lib/auth.ts's signIn callback sends this when the WitUS
+    // ID token does not assert email_verified. Not AccessDenied, because the person
+    // may be the admin; they just have not confirmed the address at WitUS yet.
+    case "WitusEmailUnverified":
+      return {
+        kind: "notice",
+        title: "Your WitUS email is not verified",
+        body: "WitUS has not confirmed the email on that account, so it cannot sign you in here. Confirm it at WitUS, or use the email form above.",
       };
 
     // The visitor asked for a page that needs a session and had none. Not a

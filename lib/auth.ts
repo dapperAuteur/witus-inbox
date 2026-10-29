@@ -7,6 +7,12 @@ import { getDb } from "@/db";
 import { accounts, sessions, users, verificationTokens } from "@/db/schema";
 import { getEnv, isWitusOidcConfigured } from "@/lib/env";
 import { WITUS_OIDC_DISCOVERY_FALLBACK } from "@/lib/silent-sso";
+import {
+  WITUS_ALLOW_EMAIL_ACCOUNT_LINKING,
+  WITUS_PROVIDER_ID,
+  normalizeEmail,
+  witusSignInCheck,
+} from "@/lib/sso-linking";
 
 const env = getEnv();
 const adminEmail = env.ADMIN_EMAIL.toLowerCase();
@@ -14,6 +20,7 @@ const adminEmail = env.ADMIN_EMAIL.toLowerCase();
 interface WitusProfile {
   sub: string;
   email?: string;
+  email_verified?: boolean;
   name?: string;
 }
 
@@ -28,7 +35,7 @@ interface WitusProfile {
  */
 function witusProvider(): OAuthConfig<WitusProfile> {
   return {
-    id: "witus",
+    id: WITUS_PROVIDER_ID,
     name: "WitUS",
     type: "oauth",
     wellKnown: process.env.WITUS_OIDC_DISCOVERY_URL ?? WITUS_OIDC_DISCOVERY_FALLBACK,
@@ -42,10 +49,18 @@ function witusProvider(): OAuthConfig<WitusProfile> {
     // 2026-10-16; witus repo scripts/check-idp-id-token-alg.mjs checks the live JWKS.
     client: { id_token_signed_response_alg: "EdDSA" },
     checks: ["pkce", "state"],
+    // Link a first WitUS sign-in to the existing same-email user (the owner's
+    // magic-link account) instead of failing with OAuthAccountNotLinked. Safe ONLY
+    // because the signIn callback below refuses any WitUS sign-in whose ID token
+    // lacks `email_verified: true`, and that callback runs before NextAuth's linking
+    // step. Reasoning and sources: lib/sso-linking.ts.
+    allowDangerousEmailAccountLinking: WITUS_ALLOW_EMAIL_ACCOUNT_LINKING,
     profile(profile) {
       return {
         id: profile.sub,
-        email: profile.email ?? null,
+        // Lowercased so the adapter's exact-match getUserByEmail finds the row the
+        // email provider wrote (it lowercases), rather than missing it.
+        email: normalizeEmail(profile.email),
         name: profile.name ?? null,
         image: null,
       };
@@ -83,7 +98,15 @@ export const authOptions: NextAuthOptions = {
     error: "/auth/sign-in",
   },
   callbacks: {
-    signIn({ user }) {
+    signIn({ user, account, profile }) {
+      // WitUS only: the IdP must assert a verified email before this sign-in may
+      // reach the admin gate or NextAuth's account-linking step. Not AccessDenied,
+      // so an admin with an unverified WitUS address is not sent to the waitlist.
+      const witus = witusSignInCheck(account?.provider, profile);
+      if (witus !== true) {
+        console.warn("[auth] refused WitUS sign-in without a verified email");
+        return witus;
+      }
       const email = user?.email?.toLowerCase();
       if (!email || email !== adminEmail) {
         console.warn("[auth] rejected non-admin sign-in attempt");
