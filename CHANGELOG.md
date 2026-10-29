@@ -14,6 +14,10 @@ Track E open-source launch prep. Final cut of v0.1.0 happens at the launch tag.
 - Unit tests for `lib/hmac.ts` and `lib/mailgun-webhook.ts` via vitest.
 - Public roadmap at [`docs/roadmap.md`](./docs/roadmap.md).
 
+### Fixed
+
+- "Sign in with WitUS" now links to an existing account with the same email (the owner's magic-link account) instead of failing with "That account is not linked." WitUS provider only, and only when the IdP asserts `email_verified: true`; an unverified WitUS email gets its own notice. See `lib/sso-linking.ts`.
+
 ### Changed
 
 - `lib/mailgun.ts` and `lib/sms.ts` no longer fall back to dev-log when `VERCEL_ENV === "production"` and credentials are missing. They return `{ ok: false }` with a sanitized log line, so misconfigured production deploys surface a 502 in the UI instead of a false "Replied" state.
