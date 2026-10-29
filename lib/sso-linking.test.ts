@@ -95,6 +95,18 @@ describe("the real auth config", () => {
     expect(linking).toEqual({ email: false, [WITUS_PROVIDER_ID]: true });
   });
 
+  it("sends no `prompt` to the IdP, so an existing WitUS session completes without asking again", () => {
+    // accounts.witus.online (better-auth oidcProvider) issues a code straight away for a
+    // signed-in user of a trusted client (skipConsent) unless the request carries
+    // prompt=login or prompt=consent. Checked live 2026-10-29: the authorize URL Inbox
+    // builds is client_id=witus-inbox, scope, PKCE, state, redirect_uri, and no prompt.
+    const witus = authOptions.providers.find((p) => p.id === WITUS_PROVIDER_ID) as unknown as {
+      authorization: { params: Record<string, string> };
+    };
+    expect(witus.authorization.params).not.toHaveProperty("prompt");
+    expect(witus.authorization.params.scope.split(" ")).toContain("email");
+  });
+
   it("lowercases the WitUS email in the mapped profile", () => {
     const witus = authOptions.providers.find((p) => p.id === WITUS_PROVIDER_ID) as unknown as {
       profile: (p: Record<string, unknown>) => { email: string | null };
