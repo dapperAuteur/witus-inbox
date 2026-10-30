@@ -1,10 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/db";
 import { submissions } from "@/db/schema";
 import {
+  doneKeyFor,
   isSameOrigin,
   parseArchiveForm,
   parseArchiveJson,
@@ -17,9 +18,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Archive or unarchive one or many submissions. Archiving sets `archived_at`;
- * unarchiving clears it. Nothing is deleted: the row, its replies and its status
- * stay as they were. proxy.ts already limits /api/submissions/* to the admin; the
+ * The reversible triage actions on one or many submissions:
+ *   archive / unarchive  set or clear `archived_at`;
+ *   close                set `status` to closed (hidden from the default list);
+ *   reopen               set a closed submission back to in_progress.
+ * Nothing is deleted here: permanent delete is POST /api/submissions/delete, behind
+ * a confirm page. proxy.ts already limits /api/submissions/* to the admin; the
  * session check here is the second lock, as in the status route.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -55,22 +59,42 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   let count = 0;
   try {
-    const updated = await getDb()
-      .update(submissions)
-      .set({ archivedAt: parsed.archived ? new Date() : null })
-      .where(inArray(submissions.id, parsed.ids))
-      .returning({ id: submissions.id });
+    const db = getDb();
+    const ids = inArray(submissions.id, parsed.ids);
+    const returning = { id: submissions.id };
+    let updated: Array<{ id: string }>;
+    switch (parsed.action) {
+      case "archive":
+      case "unarchive":
+        updated = await db
+          .update(submissions)
+          .set({ archivedAt: parsed.action === "archive" ? new Date() : null })
+          .where(ids)
+          .returning(returning);
+        break;
+      case "close":
+        updated = await db.update(submissions).set({ status: "closed" }).where(ids).returning(returning);
+        break;
+      case "reopen":
+        // Only closed rows: reopening must not reset a "waiting" or "replied" one.
+        updated = await db
+          .update(submissions)
+          .set({ status: "in_progress" })
+          .where(and(ids, eq(submissions.status, "closed")))
+          .returning(returning);
+        break;
+    }
     count = updated.length;
   } catch (err) {
     const code = err instanceof Error ? err.name : "UnknownError";
-    console.error("[archive] update failed ids=%d err=%s", parsed.ids.length, code);
+    console.error("[archive] %s failed ids=%d err=%s", parsed.action, parsed.ids.length, code);
     return NextResponse.json({ ok: false }, { status: 500 });
   }
 
-  console.log("[archive] archived=%s requested=%d updated=%d", parsed.archived, parsed.ids.length, count);
+  console.log("[archive] action=%s requested=%d updated=%d", parsed.action, parsed.ids.length, count);
   if (isJson) return NextResponse.json({ ok: true, updated: count }, { status: 200 });
   return NextResponse.redirect(
-    new URL(returnUrlWithNotice(parsed.returnTo, parsed.archived, count), request.url),
+    new URL(returnUrlWithNotice(parsed.returnTo, doneKeyFor(parsed.action), count), request.url),
     303,
   );
 }
