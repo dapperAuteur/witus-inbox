@@ -69,3 +69,22 @@ test("the waitlist page without ?from=sso still offers to add you", async ({ pag
   await expect(page.getByRole("button", { name: /add me to the list/i })).toBeVisible();
   await expectNoSeriousA11yViolations(page);
 });
+
+test("anonymous visitors cannot reach the delete confirm page or the delete route", async ({
+  page,
+  request,
+}) => {
+  // Permanent delete (POST /api/submissions/delete) and its confirm page (/inbox/delete)
+  // sit behind proxy.ts like the rest of the triage UI. This is the only part of that
+  // guard CI can check without the admin's session: a stranger is sent to sign in and
+  // the route answers nothing but a redirect or a refusal. The id is a made-up UUID.
+  const id = "00000000-0000-4000-8000-000000000000";
+  await page.goto(`/inbox/delete?id=${id}`);
+  await expect(page).toHaveURL(/\/auth\/sign-in/);
+
+  const res = await request.post("/api/submissions/delete", {
+    form: { id, confirm: "delete" },
+    maxRedirects: 0,
+  });
+  expect([302, 303, 307, 308, 401, 403]).toContain(res.status());
+});
