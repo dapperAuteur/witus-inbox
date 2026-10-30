@@ -237,11 +237,13 @@ unset STORAGE_DATABASE_URL_UNPOOLED
 
 Expected output for the 2026-10-29 change: one `ALTER TABLE "submission" ADD COLUMN "archived_at" timestamp with time zone;`. Check it read-only afterwards with `select count(*) from submission where archived_at is not null;` (0 until something is archived). Running it again prints "No changes detected".
 
+The 2026-10-30 change (Close, Reopen, permanent Delete) has **no schema change**: `closed` was already a `submission_status` value, and the delete route removes the submission's `reply` rows itself, in the same transaction, so it does not depend on the foreign key's `ON DELETE CASCADE` being present. `npm run db:push` from that branch prints "No changes detected" once the 2026-10-29 `archived_at` column is in; if it prints the `archived_at` statement instead, that earlier step was never run, and `/inbox` errors until it is.
+
 ---
 
 ## What this guide doesn't cover
 
 - Self-hosting on Fly, Railway, or Docker. The env-var contract carries over; the deploy mechanics swap out.
-- Replacing Mailgun with Resend, Postmark, or Amazon SES. `EMAIL_SERVER` accepts any SMTP URL; for the reply composer's HTTP API path, `lib/mailgun.ts` would need a sibling for the new provider.
+- Replacing Mailgun with another provider such as Postmark or Amazon SES. `EMAIL_SERVER` accepts any SMTP URL; for the reply composer's HTTP API path, `lib/mailgun.ts` would need a sibling for the new provider.
 - Replacing Neon with another Postgres. Change `STORAGE_DATABASE_URL` to your provider's URL; `db:push` will run if the SQL surface is compatible. The receiver itself is plain Postgres with JSONB, no Neon-specific features.
 - Multi-tenant setups. The receiver is single-operator on purpose. See [CONTRIBUTING.md](../CONTRIBUTING.md) for scope.

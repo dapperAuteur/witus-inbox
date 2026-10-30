@@ -8,7 +8,8 @@ import { ReplyComposer } from "@/components/ReplyComposer";
 import { StatusBadge, type SubmissionStatus } from "@/components/StatusBadge";
 import { StatusControl } from "@/components/StatusControl";
 import { Badge } from "@/components/ui/badge";
-import { archiveNotice } from "@/lib/archive";
+import { BUTTON_DANGER_OUTLINE, BUTTON_OUTLINE } from "@/components/ui/classes";
+import { detailNotice } from "@/lib/archive";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export default async function SubmissionDetailPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const notice = archiveNotice(sp.done, sp.n);
+  const notice = detailNotice(sp.done);
   if (!UUID.test(id)) notFound();
 
   const db = getDb();
@@ -107,7 +108,7 @@ export default async function SubmissionDetailPage({
 
       {notice ? (
         <p role="status" className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-100">
-          {submission.archivedAt ? "Archived. It stays here, with its history, under Archived." : "Back in the inbox."}
+          {notice}
         </p>
       ) : null}
 
@@ -134,6 +135,45 @@ export default async function SubmissionDetailPage({
         </time>
       </header>
 
+      {/* Close, Archive and Delete, at the top so they are found without scrolling.
+          Close and Archive are plain form posts to app/api/submissions/archive (303 back
+          here; no JavaScript needed). Delete opens the confirm page, which names the item. */}
+      <section aria-labelledby="actions-heading" className="rounded-md border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <h2 id="actions-heading" className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Actions
+        </h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <form method="post" action="/api/submissions/archive" className="contents">
+            <input type="hidden" name="id" value={submission.id} />
+            <input type="hidden" name="return" value={`/inbox/${submission.id}`} />
+            <button
+              type="submit"
+              name="action"
+              value={submission.status === "closed" ? "reopen" : "close"}
+              className={BUTTON_OUTLINE}
+            >
+              {submission.status === "closed" ? "Reopen" : "Close"}
+            </button>
+            <button
+              type="submit"
+              name="action"
+              value={submission.archivedAt ? "unarchive" : "archive"}
+              className={BUTTON_OUTLINE}
+            >
+              {submission.archivedAt ? "Unarchive" : "Archive"}
+            </button>
+          </form>
+          <Link href={`/inbox/delete?id=${submission.id}`} className={BUTTON_DANGER_OUTLINE}>
+            Delete…
+          </Link>
+        </div>
+        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+          Close marks it done and hides it from the list (a reply from the sender reopens it). Archive files it
+          under Archived. Both keep the record and can be undone. Delete removes it for good, after a confirm step.
+          {submission.archivedAt ? ` Archived ${submission.archivedAt.toLocaleString()}.` : ""}
+        </p>
+      </section>
+
       <section aria-label="Payload" className="rounded-md border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Submitted data</h2>
         <PayloadRenderer payload={submission.payload} />
@@ -141,25 +181,6 @@ export default async function SubmissionDetailPage({
 
       <section aria-label="Status" className="rounded-md border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <StatusControl submissionId={submission.id} current={submission.status} />
-        {/* A plain form post: archiving keeps the row, its status and its history.
-            app/api/submissions/archive answers with a 303 back to this page. */}
-        <form method="post" action="/api/submissions/archive" className="mt-4 flex flex-wrap items-center gap-3">
-          <input type="hidden" name="id" value={submission.id} />
-          <input type="hidden" name="return" value={`/inbox/${submission.id}`} />
-          <button
-            type="submit"
-            name="action"
-            value={submission.archivedAt ? "unarchive" : "archive"}
-            className="inline-flex min-h-11 items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-          >
-            {submission.archivedAt ? "Unarchive" : "Archive"}
-          </button>
-          {submission.archivedAt ? (
-            <span className="text-xs text-slate-500">
-              Archived {submission.archivedAt.toLocaleString()}
-            </span>
-          ) : null}
-        </form>
       </section>
 
       <section aria-label="Reply" className="rounded-md border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">

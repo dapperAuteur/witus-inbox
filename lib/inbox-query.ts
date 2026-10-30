@@ -10,7 +10,9 @@
 //   source=<slug>          repeatable; one chip per ecosystem app (OR)
 //   form_type=<type>       repeatable; exact form types (OR)
 //   priority=normal|high   repeatable
-//   status=<status>        one of the submission statuses ("Unread or new" = status=new)
+//   status=<status>|any    one of the submission statuses ("Unread or new" = status=new,
+//                          "Closed" = status=closed), or "any" for every status. With no
+//                          status, closed submissions are hidden (the default list is open work).
 //   q=<text>               search: name, email, form type, and the payload text
 //   from=YYYY-MM-DD, to=YYYY-MM-DD   received date range, inclusive, in UTC
 //   sort=newest|oldest|priority|source|kind
@@ -20,7 +22,7 @@
 //
 // No env, no next/*, no server-only: lib/inbox-query.test.ts pins it.
 
-import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { submissions } from "@/db/schema";
 
 export const PAGE_SIZE = 50;
@@ -30,6 +32,8 @@ const MAX_FORM_TYPE_LENGTH = 100;
 
 export const STATUSES = ["new", "in_progress", "replied", "waiting", "closed"] as const;
 export type Status = (typeof STATUSES)[number];
+/** The status filter: one status, or "any" for every status including closed. */
+export type StatusFilter = Status | "any";
 export const PRIORITIES = ["normal", "high"] as const;
 export type Priority = (typeof PRIORITIES)[number];
 export const SORTS = ["newest", "oldest", "priority", "source", "kind"] as const;
@@ -75,7 +79,8 @@ export interface InboxQuery {
   sources: string[];
   formTypes: string[];
   priorities: Priority[];
-  status: Status | null;
+  /** null = every status except closed (the default list is open work). */
+  status: StatusFilter | null;
   q: string;
   from: string | null;
   to: string | null;
@@ -149,7 +154,7 @@ export function parseInboxQuery(params: RawParams): InboxQuery {
     sources: dedupe(getAll(params, "source")).filter((s) => SLUG.test(s)),
     formTypes: dedupe(getAll(params, "form_type")).filter((t) => t.length <= MAX_FORM_TYPE_LENGTH),
     priorities: pick(PRIORITIES, getAll(params, "priority")),
-    status: STATUSES.find((s) => s === statusRaw) ?? null,
+    status: statusRaw === "any" ? "any" : (STATUSES.find((s) => s === statusRaw) ?? null),
     q: getOne(params, "q")?.trim().slice(0, MAX_Q_LENGTH) ?? "",
     from,
     to,
@@ -235,7 +240,6 @@ export function buildConditions(query: InboxQuery, omit?: FacetGroup): SQL[] {
   if (omit !== "priority" && query.priorities.length > 0) {
     c.push(inArray(submissions.priority, query.priorities));
   }
-  if (omit !== "status" && query.status) c.push(eq(submissions.status, query.status));
   if (query.q) {
     const pattern = `%${escapeLike(query.q)}%`;
     const any = or(
@@ -252,6 +256,13 @@ export function buildConditions(query: InboxQuery, omit?: FacetGroup): SQL[] {
     const end = new Date(`${query.to}T00:00:00Z`);
     end.setUTCDate(end.getUTCDate() + 1);
     c.push(lt(submissions.receivedAt, end));
+  }
+  // Last, so the parameter numbers of the groups above do not depend on it.
+  if (omit !== "status") {
+    // Closing a submission takes it out of the default list, as archiving does; the
+    // Closed chip (status=closed) or "All, including closed" (status=any) shows it.
+    if (query.status === null) c.push(ne(submissions.status, "closed"));
+    else if (query.status !== "any") c.push(eq(submissions.status, query.status));
   }
   return c;
 }

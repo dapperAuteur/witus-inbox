@@ -75,6 +75,14 @@ describe("reading the URL", () => {
     });
   });
 
+  it("reads status=any (every status, closed included) and round-trips it", () => {
+    const q = parseInboxQuery(new URLSearchParams("status=any"));
+    expect(q.status).toBe("any");
+    expect(serializeInboxQuery(q).toString()).toBe("status=any");
+    expect(hasFilters(q)).toBe(true);
+    expect(parseInboxQuery(new URLSearchParams("status=everything")).status).toBeNull();
+  });
+
   it("accepts Next's searchParams object shape", () => {
     expect(parseInboxQuery({ kind: ["bug", "bug"], source: "witus-learn" })).toMatchObject({
       kinds: ["bug"],
@@ -149,15 +157,31 @@ describe("writing the URL (bookmarkable views)", () => {
 
 describe("the SQL a view runs", () => {
   it("hides archived rows by default and shows only them in the Archived view", () => {
-    expect(render(DEFAULT_QUERY).sql).toBe('"submission"."archived_at" is null');
-    expect(render({ ...DEFAULT_QUERY, view: "archived" }).sql).toBe('"submission"."archived_at" is not null');
+    expect(render(DEFAULT_QUERY).sql).toContain('"submission"."archived_at" is null');
+    expect(render({ ...DEFAULT_QUERY, view: "archived" }).sql).toContain('"submission"."archived_at" is not null');
+  });
+
+  it("hides closed rows by default; the Closed chip and status=any show them", () => {
+    expect(render(DEFAULT_QUERY)).toMatchObject({
+      sql: '("submission"."archived_at" is null and "submission"."status" <> $1)',
+      params: ["closed"],
+    });
+    expect(render({ ...DEFAULT_QUERY, view: "archived" }).sql).toContain('"submission"."status" <> $1');
+    const closed = render({ ...DEFAULT_QUERY, status: "closed" });
+    expect(closed.sql).toContain('"submission"."status" = $1');
+    expect(closed.sql).not.toContain("<>");
+    expect(closed.params).toEqual(["closed"]);
+    expect(render({ ...DEFAULT_QUERY, status: "any" }).sql).toBe('"submission"."archived_at" is null');
+    // A chip count leaves the status group out entirely, closed-hiding included.
+    expect(render(DEFAULT_QUERY, "status").sql).not.toContain('"status"');
   });
 
   it("ORs within a group and ANDs across groups", () => {
     const { sql, params } = render({ ...DEFAULT_QUERY, kinds: ["bug", "feature"], sources: ["invest-witus"] });
     expect(sql).toContain('("submission"."form_type" ~* $1 or "submission"."form_type" ~* $2)');
     expect(sql).toContain('and "submission"."source" in ($3)');
-    expect(params).toEqual([KINDS.bug.pattern, KINDS.feature.pattern, "invest-witus"]);
+    // "closed" last: the default list hides closed rows (see the closed test below).
+    expect(params).toEqual([KINDS.bug.pattern, KINDS.feature.pattern, "invest-witus", "closed"]);
   });
 
   it("searches name, email, form type and the payload text, with LIKE wildcards escaped", () => {
@@ -171,7 +195,7 @@ describe("the SQL a view runs", () => {
     const { sql, params } = render({ ...DEFAULT_QUERY, from: "2026-10-01", to: "2026-10-31" });
     expect(sql).toContain('"submission"."received_at" >= $1');
     expect(sql).toContain('"submission"."received_at" < $2');
-    expect(params).toEqual(["2026-10-01T00:00:00.000Z", "2026-11-01T00:00:00.000Z"]);
+    expect(params).toEqual(["2026-10-01T00:00:00.000Z", "2026-11-01T00:00:00.000Z", "closed"]);
   });
 
   it("leaves one group out for that group's chip counts", () => {

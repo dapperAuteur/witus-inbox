@@ -7,6 +7,7 @@ import { StatusBadge, type SubmissionStatus } from "@/components/StatusBadge";
 import { SignOutButton, SignOutEverywhereButton } from "@/components/SignOutButton";
 import { SelectAllCheckbox } from "@/components/SelectAllCheckbox";
 import { Badge } from "@/components/ui/badge";
+import { BUTTON_DANGER_OUTLINE } from "@/components/ui/classes";
 import { getWitusEndSessionUrl } from "@/lib/env";
 import { archiveNotice } from "@/lib/archive";
 import {
@@ -54,6 +55,7 @@ interface Facets {
   sources: Map<string, number>;
   high: number;
   fresh: number;
+  closed: number;
   archived: number;
 }
 
@@ -136,7 +138,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
   // beside a chip is what clicking it would show (see buildConditions).
   let facets: Facets | null = null;
   try {
-    const [kindRow, sourceRows, high, fresh, archived] = await Promise.all([
+    const [kindRow, sourceRows, high, fresh, closed, archived] = await Promise.all([
       db
         .select(
           Object.fromEntries(
@@ -152,6 +154,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
         .groupBy(submissions.source),
       db.select({ n: COUNT }).from(submissions).where(both(whereFor(view, "priority"), eq(submissions.priority, "high"))),
       db.select({ n: COUNT }).from(submissions).where(both(whereFor(view, "status"), eq(submissions.status, "new"))),
+      db.select({ n: COUNT }).from(submissions).where(both(whereFor(view, "status"), eq(submissions.status, "closed"))),
       db.select({ n: COUNT }).from(submissions).where(both(whereFor(view, "view"), isNotNull(submissions.archivedAt))),
     ]);
     facets = {
@@ -159,6 +162,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
       sources: new Map(sourceRows.map((r) => [r.source, r.n])),
       high: high[0].n,
       fresh: fresh[0].n,
+      closed: closed[0].n,
       archived: archived[0].n,
     };
   } catch (err) {
@@ -173,6 +177,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
   const exportHref = `/api/inbox/export${exportQs ? `?${exportQs}` : ""}`;
   const archivedView = view.view === "archived";
   const highOn = view.priorities.length === 1 && view.priorities[0] === "high";
+  const closedView = view.status === "closed";
 
   return (
     <main id="main" className="mx-auto w-full max-w-4xl px-4 py-6 sm:py-10">
@@ -218,6 +223,12 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
             label="Unread or new"
             count={facets?.fresh}
           />
+          <Chip
+            href={inboxHref(view, { status: closedView ? null : "closed" })}
+            on={closedView}
+            label="Closed"
+            count={facets?.closed}
+          />
         </ChipGroup>
         <ChipGroup label="Kind">
           {KIND_KEYS.map((k) => (
@@ -249,7 +260,8 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
         </ChipGroup>
         <p className="text-[11px] text-slate-400">
           Kinds are matched by form type name. Chips in different rows combine (Bugs and one app shows that
-          app&apos;s bugs); counts show what each chip would add. Dashed apps have no submissions yet.
+          app&apos;s bugs); counts show what each chip would add. Dashed apps have no submissions yet. Closed
+          submissions are hidden unless the Closed chip is on or Status is set to include them.
           {hasFilters(view) ? (
             <>
               {" "}
@@ -281,10 +293,11 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
           </Field>
           <Field label="Status">
             <select name="status" defaultValue={view.status ?? ""} className={INPUT}>
-              <option value="">All</option>
+              <option value="">Open (hides Closed)</option>
               {STATUSES.map((s) => (
                 <option key={s} value={s}>{STATUS_LABELS[s]}</option>
               ))}
+              <option value="any">All, including Closed</option>
             </select>
           </Field>
           <Field label="Received from (UTC)">
@@ -349,18 +362,31 @@ export default async function InboxPage({ searchParams }: { searchParams: Search
             </>
           ) : archivedView ? (
             "Nothing archived matches the current filter."
+          ) : closedView ? (
+            "No closed submissions match the current filter."
           ) : (
-            "No submissions match the current filter."
+            "No open submissions match the current filter."
           )}
         </p>
       ) : (
         <form id="bulk" method="post" action="/api/submissions/archive">
           <input type="hidden" name="return" value={currentHref} />
+          {/* One form, three ways out: Close/Reopen and Archive/Unarchive post to the
+              archive route; Delete selected sends the ticked ids to the confirm page as a
+              GET (formAction), which names them before anything is removed. */}
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <SelectAllCheckbox formId="bulk" />
-            <button type="submit" name="action" value={archivedView ? "unarchive" : "archive"} className={BUTTON_OUTLINE}>
-              {archivedView ? "Unarchive selected" : "Archive selected"}
-            </button>
+            <div role="group" aria-label="With selected" className="flex flex-wrap items-center gap-2">
+              <button type="submit" name="action" value={closedView ? "reopen" : "close"} className={BUTTON_OUTLINE}>
+                {closedView ? "Reopen selected" : "Close selected"}
+              </button>
+              <button type="submit" name="action" value={archivedView ? "unarchive" : "archive"} className={BUTTON_OUTLINE}>
+                {archivedView ? "Unarchive selected" : "Archive selected"}
+              </button>
+              <button type="submit" formAction="/inbox/delete" formMethod="get" className={BUTTON_DANGER_OUTLINE}>
+                Delete selected…
+              </button>
+            </div>
           </div>
           <ul className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
             {rows.map((row) => {

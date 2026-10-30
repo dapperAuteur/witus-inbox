@@ -15,6 +15,7 @@ Track E open-source launch prep. Final cut of v0.1.0 happens at the launch tag.
 - Public roadmap at [`docs/roadmap.md`](./docs/roadmap.md).
 - `/inbox` list tools: paging (50 per page), five sorts, quick-filter chips with counts (kinds, one per app, High priority, Unread or new, Archived), search over form type and message text as well as name and email, a UTC date range, and the full view in the URL. CSV export follows the same view and gains an `archived_at` column (appended last).
 - Archive and unarchive, one (detail page) or many (list checkboxes), plus an Archived view. New nullable column `submission.archived_at`; nothing is deleted, and an inbound submitter reply unarchives. Works without JavaScript (plain form posts to `POST /api/submissions/archive`, which also takes JSON).
+- Close, Reopen and Delete. The detail page has an Actions row at the top (Close or Reopen, Archive or Unarchive, Delete…); the list's bulk bar adds Close selected (Reopen selected in the Closed view) and Delete selected…. Delete is permanent and goes through a confirm page (`/inbox/delete`) that names each submission and its reply count; `POST /api/submissions/delete` requires `confirm=delete` and an `ADMIN_EMAIL` session, and removes the replies and the submission in one transaction. `POST /api/submissions/archive` also takes `action=close|reopen` (JSON: `{ ids, action }`; the original `{ ids, archived }` still works). No schema change.
 - `docs/deploy-vercel-neon.md`, Schema changes (production): how to apply a schema change by hand before merging it (`db:push` is deliberately not run from CI).
 
 ### Fixed
@@ -22,6 +23,8 @@ Track E open-source launch prep. Final cut of v0.1.0 happens at the launch tag.
 - "Sign in with WitUS" now links to an existing account with the same email (the owner's magic-link account) instead of failing with "That account is not linked." WitUS provider only, and only when the IdP asserts `email_verified: true`; an unverified WitUS email gets its own notice. See `lib/sso-linking.ts`.
 
 ### Changed
+
+- The default `/inbox` list (and the CSV export of it) now hides `closed` submissions, as it hides archived ones. A new **Closed** chip (`status=closed`) shows them, and the Status filter's "All, including Closed" (`status=any`) shows every status. The Status filter's empty option is now labeled "Open (hides Closed)".
 
 - `lib/mailgun.ts` and `lib/sms.ts` no longer fall back to dev-log when `VERCEL_ENV === "production"` and credentials are missing. They return `{ ok: false }` with a sanitized log line, so misconfigured production deploys surface a 502 in the UI instead of a false "Replied" state.
 

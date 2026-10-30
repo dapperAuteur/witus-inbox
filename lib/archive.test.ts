@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_ARCHIVE_IDS,
   archiveNotice,
+  detailNotice,
+  doneKeyFor,
   isSameOrigin,
   parseArchiveForm,
   parseArchiveJson,
@@ -23,11 +25,24 @@ describe("the bulk archive form", () => {
   it("archives many at once and returns to the same view", () => {
     expect(
       parseArchiveForm(form([["id", A], ["id", B], ["id", A], ["action", "archive"], ["return", "/inbox?kind=bug&page=2"]])),
-    ).toEqual({ ids: [A, B], archived: true, returnTo: "/inbox?kind=bug&page=2" });
+    ).toEqual({ ids: [A, B], action: "archive", returnTo: "/inbox?kind=bug&page=2" });
   });
 
   it("unarchives", () => {
-    expect(parseArchiveForm(form([["id", A], ["action", "unarchive"]]))?.archived).toBe(false);
+    expect(parseArchiveForm(form([["id", A], ["action", "unarchive"]]))?.action).toBe("unarchive");
+  });
+
+  it("closes and reopens, one or many", () => {
+    expect(parseArchiveForm(form([["id", A], ["id", B], ["action", "close"]]))).toEqual({
+      ids: [A, B],
+      action: "close",
+      returnTo: "/inbox",
+    });
+    expect(parseArchiveForm(form([["id", A], ["action", "reopen"], ["return", `/inbox/${A}`]]))).toEqual({
+      ids: [A],
+      action: "reopen",
+      returnTo: `/inbox/${A}`,
+    });
   });
 
   it("refuses nothing ticked, a bad id, an unknown action, or too many ids", () => {
@@ -42,8 +57,14 @@ describe("the bulk archive form", () => {
 });
 
 describe("the JSON body", () => {
-  it("takes ids and a boolean", () => {
-    expect(parseArchiveJson({ ids: [A], archived: false })).toEqual({ ids: [A], archived: false, returnTo: "/inbox" });
+  it("takes ids and an action", () => {
+    expect(parseArchiveJson({ ids: [A], action: "close" })).toEqual({ ids: [A], action: "close", returnTo: "/inbox" });
+    expect(parseArchiveJson({ ids: [A], action: "delete" })).toBeNull();
+  });
+
+  it("still takes the original ids and a boolean", () => {
+    expect(parseArchiveJson({ ids: [A], archived: false })).toEqual({ ids: [A], action: "unarchive", returnTo: "/inbox" });
+    expect(parseArchiveJson({ ids: [A], archived: true })?.action).toBe("archive");
     expect(parseArchiveJson({ ids: [A], archived: "yes" })).toBeNull();
     expect(parseArchiveJson({ ids: [], archived: true })).toBeNull();
     expect(parseArchiveJson(null)).toBeNull();
@@ -61,7 +82,7 @@ describe("where a form post may send the browser back to", () => {
   });
 
   it("adds a one-time notice that the saved view does not keep", () => {
-    const back = returnUrlWithNotice("/inbox?kind=bug&page=2", true, 3);
+    const back = returnUrlWithNotice("/inbox?kind=bug&page=2", doneKeyFor("archive"), 3);
     expect(back).toBe("/inbox?kind=bug&page=2&done=archived&n=3");
     const view = parseInboxQuery(new URL(back, "https://x.invalid").searchParams);
     expect(serializeInboxQuery(view).toString()).toBe("kind=bug&page=2");
@@ -70,8 +91,26 @@ describe("where a form post may send the browser back to", () => {
   it("says what happened", () => {
     expect(archiveNotice("archived", "3")).toBe("Archived 3 submissions. They are under Archived.");
     expect(archiveNotice("unarchived", "1")).toBe("Moved 1 submission back to the inbox.");
-    expect(archiveNotice("deleted", "1")).toBeNull();
+    expect(archiveNotice("closed", "2")).toMatch(/^Closed 2 submissions\. .*Closed chip/);
+    expect(archiveNotice("reopened", "1")).toMatch(/^Reopened 1 submission\./);
+    expect(archiveNotice("deleted", "1")).toBe("Deleted 1 submission permanently.");
+    expect(archiveNotice("exploded", "1")).toBeNull();
     expect(archiveNotice(undefined, undefined)).toBeNull();
+  });
+
+  it("maps each action to its notice key", () => {
+    expect(doneKeyFor("archive")).toBe("archived");
+    expect(doneKeyFor("unarchive")).toBe("unarchived");
+    expect(doneKeyFor("close")).toBe("closed");
+    expect(doneKeyFor("reopen")).toBe("reopened");
+  });
+
+  it("says what happened on the submission's own page", () => {
+    expect(detailNotice("closed")).toMatch(/hidden from the inbox list/);
+    expect(detailNotice("reopened")).toBe("Reopened as In progress.");
+    expect(detailNotice("archived")).toMatch(/^Archived\./);
+    expect(detailNotice("deleted")).toBeNull();
+    expect(detailNotice(undefined)).toBeNull();
   });
 });
 
