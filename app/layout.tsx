@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SiteFooter, BRAND_VARIANT } from "@/components/SiteFooter";
+import { SiteHeader } from "@/components/SiteHeader";
 import { PostHogProvider } from "@/lib/analytics/posthog-provider";
 
 const geistSans = Geist({
@@ -51,6 +52,7 @@ export default function RootLayout({
           apiKey={process.env.NEXT_PUBLIC_POSTHOG_KEY ?? null}
           apiHost="/ingest"
         />
+        <SiteHeader />
         {children}
         <SiteFooter />
       </body>

@@ -4,7 +4,7 @@ import Link from "next/link";
 // layout, so the header (with Sign in) and the footer stay on the 404 page.
 export default function NotFound() {
   return (
-    <main id="main" className="mx-auto flex w-full max-w-xl flex-col items-start gap-4 px-4 py-16">
+    <main id="main" className="mx-auto flex w-full max-w-xl flex-1 flex-col items-start gap-4 px-4 py-16">
       <h1 className="text-3xl font-semibold tracking-tight">Page not found</h1>
       <p className="text-base opacity-80">That page does not exist or has moved.</p>
       <Link
